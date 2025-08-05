@@ -1,9 +1,5 @@
 import collMaps from "../../assets/cell-kn-mvp-collection-maps.json";
 import React, { useEffect, useMemo, useState } from "react";
-import { getColorForCollection } from "../../services/ColorServices/ColorServices";
-import { Link } from "react-router-dom";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowRight } from "@fortawesome/free-solid-svg-icons";
 
 export const fetchCollections = async (graphType) => {
   // Accept graphType argument
@@ -401,4 +397,20 @@ export const findFtuUrlById = (ftuPartsArray, searchId) => {
   // Return match digital object URL
   console.log(foundMatch);
   return foundMatch?.ftu_digital_object || null;
+};
+
+// Helper to check if platform is running a variation on MacOS
+export const isMac = /mac/i.test(navigator.platform);
+
+// A helper to determine if a raw API graph response object is empty
+export const hasNodesInRawData = (data) => {
+  if (!data || typeof data !== "object" || Object.keys(data).length === 0) {
+    return false;
+  }
+  if (data.nodes && typeof data.nodes === "object") {
+    return Object.values(data.nodes).some(
+      (nodeArray) => Array.isArray(nodeArray) && nodeArray.length > 0,
+    );
+  }
+  return false;
 };
