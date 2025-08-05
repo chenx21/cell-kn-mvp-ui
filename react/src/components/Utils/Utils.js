@@ -206,6 +206,57 @@ export const getUrl = (item) => {
   }
 };
 
+/**
+ * Extracts and formats ordered list of fields for display.
+ * Uses 'individual_fields' config to select, order, and format item properties.
+ * @param {object} item - Data object to process. Must contain `_id` property.
+ * @returns {Array<object>} Array of field objects { key, label, value, url }, or empty array.
+ */
+export const getDisplayFields = (item) => {
+  try {
+    // Load collection configuration maps.
+    const collectionMaps = new Map(collMaps.data);
+    const itemCollection = item._id.split("/")[0];
+    const collectionMap = collectionMaps.get(itemCollection);
+
+    // Get field display rules from configuration.
+    const fieldConfigs = collectionMap?.["individual_fields"];
+
+    // Return empty array if no specific field configuration exists.
+    if (!Array.isArray(fieldConfigs)) {
+      return [];
+    }
+
+    // Process configured fields, filtering out those with no value in item.
+    return fieldConfigs
+      .map((config) => {
+        const value = item[config.field_to_display];
+        let fieldUrl = null;
+
+        // Generate URL for field value if specified.
+        if (config.field_url && config.field_to_use) {
+          const urlValue = item[config.field_to_use];
+          // Ensure value for URL exists before creating link.
+          if (urlValue !== null && urlValue !== undefined) {
+            fieldUrl = config.field_url.replace("<FIELD_TO_USE>", urlValue);
+          }
+        }
+
+        return {
+          key: config.field_to_display, // Original key for React.
+          label: config.display_field_as, // Label for UI.
+          value: value,
+          url: fieldUrl,
+        };
+      })
+      .filter((field) => field.value !== null && field.value !== undefined);
+  } catch (error) {
+    // Log any exceptions during processing.
+    console.error(`getDisplayFields failed with exception: ${error}`);
+    return []; // Return empty array on error for safe rendering.
+  }
+};
+
 export const getTitle = (item) => {
   const collectionMaps = new Map(collMaps.data);
   // Get item collection
