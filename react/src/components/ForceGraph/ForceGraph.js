@@ -976,14 +976,14 @@ const ForceGraph = ({
                 </select>
                 <label htmlFor="edge-direction">Edge Direction:</label>
                 <select
-                    id="edge-direction"
-                    value={edgeDirection}
-                    onChange={handleEdgeDirectionChange}
+                  id="edge-direction"
+                  value={edgeDirection}
+                  onChange={handleEdgeDirectionChange}
                 >
                   {["ANY", "INBOUND", "OUTBOUND"].map((value) => (
-                      <option key={value} value={value}>
-                        {value}
-                      </option>
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
                   ))}
                 </select>
               </div>

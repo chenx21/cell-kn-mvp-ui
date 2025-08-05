@@ -96,10 +96,17 @@ export const getLabel = (item) => {
     const collectionMaps = new Map(collMaps.data);
     const itemCollection = item._id.split("/")[0];
 
-    // Get label rules for item's collection, fallback to 'edges' rules.
-    const labelOptions =
-      collectionMaps.get(itemCollection)?.["individual_labels"] ??
-      collectionMaps.get("edges")?.["individual_labels"];
+    // Get label rules for item's collection, fallback for edges
+    const labelOptions = collectionMaps.get(itemCollection)?.[
+      "individual_labels"
+    ] ?? [
+      {
+        field_to_use: "label",
+        to_be_replaced: "",
+        replace_with: "",
+        make_lower_case: false,
+      },
+    ];
 
     let label;
 
@@ -118,7 +125,7 @@ export const getLabel = (item) => {
           if (config.to_be_replaced) {
             processedLabel = processedLabel.replaceAll(
               config.to_be_replaced,
-              config.replace_with || ""
+              config.replace_with || "",
             );
           }
 
@@ -136,7 +143,6 @@ export const getLabel = (item) => {
 
     // Return generated label or default fallback text.
     return label || "NAME UNKNOWN";
-
   } catch (error) {
     // Log any exceptions during processing.
     console.error(`getLabel failed with exception: ${error}`);
@@ -175,7 +181,7 @@ export const getUrl = (item) => {
             if (config.to_be_replaced) {
               replacement = replacement.replaceAll(
                 config.to_be_replaced,
-                config.replace_with || ""
+                config.replace_with || "",
               );
             }
 
@@ -187,7 +193,7 @@ export const getUrl = (item) => {
             // Build final URL by replacing placeholder in template.
             const url = config.individual_url.replace(
               "<FIELD_TO_USE>",
-              replacement
+              replacement,
             );
 
             // Return successfully generated URL immediately.
@@ -217,10 +223,30 @@ export const getDisplayFields = (item) => {
     // Load collection configuration maps.
     const collectionMaps = new Map(collMaps.data);
     const itemCollection = item._id.split("/")[0];
-    const collectionMap = collectionMaps.get(itemCollection);
 
-    // Get field display rules from configuration.
-    const fieldConfigs = collectionMap?.["individual_fields"];
+    // Get field display rules from configuration, with fallback for edges.
+    const fieldConfigs = collectionMaps.get(itemCollection)?.[
+      "individual_fields"
+    ] ?? [
+      {
+        field_to_display: "label",
+        display_field_as: "Label",
+        field_url: "",
+        field_to_use: "",
+      },
+      {
+        field_to_display: "source",
+        display_field_as: "Source",
+        field_url: "",
+        field_to_use: "",
+      },
+      {
+        field_to_display: "Source",
+        display_field_as: "Source",
+        field_url: "",
+        field_to_use: "",
+      },
+    ];
 
     // Return empty array if no specific field configuration exists.
     if (!Array.isArray(fieldConfigs)) {
@@ -366,8 +392,10 @@ export const findFtuUrlById = (ftuPartsArray, searchId) => {
   }
 
   // Find match
-  const foundMatch = ftuPartsArray.find((ftuPart) =>
-    ftuPart.ftu_iri.includes(searchId) || ftuPart.ftu_part_iri.includes(searchId)
+  const foundMatch = ftuPartsArray.find(
+    (ftuPart) =>
+      ftuPart.ftu_iri.includes(searchId) ||
+      ftuPart.ftu_part_iri.includes(searchId),
   );
 
   // Return match digital object URL
