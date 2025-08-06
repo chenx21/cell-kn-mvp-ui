@@ -1,49 +1,31 @@
 import * as d3 from "d3";
-import collectionsMap from "../../assets/collectionsMap.json";
+import collMaps from "../../assets/cell-kn-mvp-collection-maps.json";
 
-// Extract the unique collection identifiers
-const collectionIds = collectionsMap
-  .map(([id]) => id)
-  .filter((id) => id !== "edges"); // Filter out 'edges'
+const collectionMaps = new Map(collMaps.maps);
+const domain = [];
+const range = [];
 
-const colors = [
-  "#e6194B",
-  "#3cb44b",
-  "#ffe119",
-  "#4363d8",
-  "#f58231",
-  "#ffd8b1",
-  "#911eb4",
-  "#f032e6",
-  "#bfef45",
-  "#fabed4",
-  "#800000",
-  "#dcbeff",
-  "#a9a9a9",
-  "#9A6324",
-  "#fffac8",
-  "#42d4f4",
-  "#aaffc3",
-  "#808000",
-  "#000075",
-  "#000000",
-  "#469990",
-];
+collectionMaps.forEach((config, id) => {
+  // Exclude edges from default categorical scale
+  if (id !== "edges") {
+    domain.push(id);
+    range.push(config.color);
+  }
+});
 
-// Create the ordinal color scale
-const colorScale = d3.scaleOrdinal(collectionIds, colors);
+// Defines D3 ordinal color scale
+export const colorScale = d3.scaleOrdinal(domain, range);
 
-// Default color for unknown collections
-const defaultColor = "#cccccc"; // Grey
+// Default color for unknown collections or those without color property.
+const defaultColor = "#cccccc";
 
+/**
+ * Gets stable color for specific collection ID from main config file.
+ * @param {string} collectionId - The ID of collection (e.g., "BMC", "edges").
+ * @returns {string} The assigned hex color code or default color.
+ */
 export const getColorForCollection = (collectionId) => {
-  if (!collectionId) {
-    return defaultColor;
-  }
-  // Check if the ID is in defined scale's domain
-  if (colorScale.domain().includes(collectionId)) {
-    return colorScale(collectionId);
-  }
-  // Return default color for any other unknown ID
-  return defaultColor;
+  // Get config for collectionId and return its color or default.
+  const config = collectionMaps.get(collectionId);
+  return config?.color || defaultColor;
 };
