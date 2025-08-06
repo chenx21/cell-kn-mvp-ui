@@ -9,7 +9,7 @@ import React, {
 import { useSelector, useDispatch } from "react-redux";
 import { ActionCreators } from "redux-undo";
 import ForceGraphConstructor from "../ForceGraphConstructor/ForceGraphConstructor";
-import collectionsMapData from "../../assets/collectionsMap.json";
+import collMaps from "../../assets/cell-kn-mvp-collection-maps.json";
 import {
   LoadingBar,
   getLabel,
@@ -65,7 +65,7 @@ const ForceGraph = ({
 
   // Local component state for UI and temporary flags.
   const [collections, setCollections] = useState([]);
-  const collectionsMap = new Map(collectionsMapData);
+  const collectionMaps = new Map(collMaps.maps);
   const [isRestoring, setIsRestoring] = useState(false);
   const [optionsVisible, setOptionsVisible] = useState(false);
   const [activeTab, setActiveTab] = useState("general");
@@ -201,7 +201,7 @@ const ForceGraph = ({
                 linkFontSize: settings.edgeFontSize,
                 initialLabelStates: settings.labelStates,
                 nodeGroups: collections,
-                collectionsMap: collectionsMap,
+                collectionMaps: collectionMaps,
                 onNodeClick: handleNodeClick,
                 onNodeDragEnd: handleNodeDragEnd,
                 interactionCallback: handlePopupClose,
@@ -614,7 +614,7 @@ const ForceGraph = ({
           </button>
         </div>
         <div className="options-tabs-content">
-                    {activeTab === "general" && (
+          {activeTab === "general" && (
             <div id="tab-panel-general" className="tab-panel active">
               <div className="option-group">
                 <label htmlFor="depth-select">Depth:</label>
@@ -824,8 +824,8 @@ const ForceGraph = ({
                             : "collection-button-deselected"
                         }
                       >
-                        {collectionsMap.has(collection)
-                          ? collectionsMap.get(collection)["display_name"]
+                        {collectionMaps.has(collection)
+                          ? collectionMaps.get(collection)["display_name"]
                           : collection}
                       </button>
                     </div>
