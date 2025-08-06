@@ -33,11 +33,10 @@
     }
   },
   "scripts": {
-    "start": "npm run fetch-collections-map && react-scripts start",
-    "fetch-collections-map": "node scripts/fetch-collections-map.js",
+    "start": "react-scripts start",
     "build-react": "react-scripts build",
     "collectstatic-django": "(cd .. && python manage.py collectstatic --noinput)",
-    "build": "npm run fetch-collections-map && npm run build-react && npm run collectstatic-django",
+    "build": "npm run build-react && npm run collectstatic-django",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "watch": "npm-watch"
