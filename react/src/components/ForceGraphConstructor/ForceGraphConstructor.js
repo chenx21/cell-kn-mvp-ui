@@ -1049,6 +1049,19 @@ function ForceGraphConstructor(
     toggleLabels,
     centerOnNode,
     resize,
+    toggleSimulation: (on) => {
+      runSimulation(
+        on,
+        simulation,
+        forceNode,
+        forceCenter,
+        forceLink,
+        processedLinks,
+        mergedOptions.nodeForceStrength,
+        mergedOptions.centerForceStrength,
+        linkForceStrength,
+      );
+    },
   };
 }
 

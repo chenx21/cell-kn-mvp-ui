@@ -33,6 +33,7 @@ import {
 } from "../../store/graphSlice";
 import { performSetOperation } from "./setOperation";
 import { useHotkeys } from "../../hooks/useHotkeys";
+import { useHotkeyHold } from "../../hooks/useHotkeyHold";
 
 // Main React component for D3 force-directed graph, wrapped in memo for performance.
 // Orchestrates Redux state, user interactions, and D3 instance.
@@ -344,6 +345,18 @@ const ForceGraph = ({
     [handleUndo, handleRedo, handleSave, handleLoad],
   );
   useHotkeys(hotkeyConfigs, [hotkeyConfigs]);
+
+  // Hold hotkey configuration for toggleSimulation
+  const handleSimulationOn = useCallback(() => {
+    graphInstanceRef.current?.toggleSimulation(true);
+  }, []);
+
+  const handleSimulationOff = useCallback(() => {
+    graphInstanceRef.current?.toggleSimulation(false);
+  }, []);
+
+  // Use the new hook for press-and-hold functionality.
+  useHotkeyHold("s", handleSimulationOn, handleSimulationOff);
 
   // --- Settings Panel Handlers ---
   const handleDepthChange = (e) =>
@@ -735,13 +748,16 @@ const ForceGraph = ({
                 </div>
               </div>
 
-              <div className="option-group checkbox-container">
+              <div className="option-group">
                 <button
                   className="simulation-toggle background-color-bg"
                   onClick={handleSimulationRestart}
                 >
                   Restart Simulation
                 </button>
+                <p className="hotkey-hint">
+                  Hold<kbd>S</kbd> to run live
+                </p>
               </div>
             </div>
           )}
