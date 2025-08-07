@@ -325,7 +325,7 @@ function waitForAlpha(simulation, threshold) {
 
 // Starts or stops D3 simulation forces.
 // Setting strengths to zero effectively freezes graph layout.
-function toggleSimulation(
+function runSimulation(
   on,
   simulation,
   forceNode,
@@ -994,7 +994,7 @@ function ForceGraphConstructor(
     updateLegend(processedNodes);
 
     // Start simulation to arrange new elements.
-    toggleSimulation(
+    runSimulation(
       true,
       simulation,
       forceNode,
@@ -1010,7 +1010,7 @@ function ForceGraphConstructor(
     const newThreshold = Math.max(1 / (processedNodes.length || 1), 0.002);
     waitForAlpha(simulation, newThreshold).then(() => {
       // Freeze graph once stable.
-      toggleSimulation(false, simulation, forceNode, forceCenter, forceLink);
+      runSimulation(false, simulation, forceNode, forceCenter, forceLink);
 
       // Perform post-simulation actions.
       if (centerNodeId) {
