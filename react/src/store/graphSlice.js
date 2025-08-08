@@ -90,14 +90,11 @@ export const fetchEdgeFilterOptions = createAsyncThunk(
     }
 
     // Call backend API to get unique field values.
-    const response = await fetch(
-      `/arango_api/edge_filter_options/`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fields: fieldsToQuery, graph: graphType}),
-      },
-    );
+    const response = await fetch(`/arango_api/edge_filter_options/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fields: fieldsToQuery, graph: graphType }),
+    });
 
     if (!response.ok) {
       throw new Error("Edge filter options fetch failed.");
@@ -216,18 +213,43 @@ const graphSlice = createSlice({
     },
     // Updates user-selected edge filter for a specific field.
     updateEdgeFilter: (state, action) => {
-      const { field, value } = action.payload; // Example: field: 'source', value: 'ClinVar'
-      // Ensure field exists in settings.edgeFilters, initialize if not.
-      if (!state.settings.edgeFilters[field]) {
-        state.settings.edgeFilters[field] = [];
+      const { field, value } = action.payload;
+      const currentFilters = state.settings.edgeFilters[field] || [];
+      let newFilters;
+
+      // Check if the incoming value is an array.
+      if (Array.isArray(value)) {
+        // Handle arrays
+        const valueAsString = JSON.stringify(value);
+        // Find index of existing array by comparing stringified values.
+        const existingIndex = currentFilters.findIndex(
+          (item) => JSON.stringify(item) === valueAsString
+        );
+
+        if (existingIndex > -1) {
+          // It exists, remove it by filtering by index.
+          newFilters = currentFilters.filter((_, index) => index !== existingIndex);
+        } else {
+          // It does not exist, add it.
+          newFilters = [...currentFilters, value];
+        }
+      } else {
+        // Handle strings
+        if (currentFilters.includes(value)) {
+          // It exists, remove it.
+          newFilters = currentFilters.filter((v) => v !== value);
+        } else {
+          // It does not exist, add it.
+          newFilters = [...currentFilters, value];
+        }
       }
 
-      const currentFilters = state.settings.edgeFilters[field];
-      const newFilters = currentFilters.includes(value)
-        ? currentFilters.filter((v) => v !== value) // Remove filter if already present.
-        : [...currentFilters, value]; // Add filter if not present.
+      // Create a new edgeFilters object to ensure Redux detects the change.
+      state.settings.edgeFilters = {
+        ...state.settings.edgeFilters,
+        [field]: newFilters,
+      };
 
-      state.settings.edgeFilters[field] = newFilters;
       state.lastActionType = "updateEdgeFilter";
     },
     // Updates a node's position, typically after user drag.

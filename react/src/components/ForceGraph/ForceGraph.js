@@ -964,7 +964,7 @@ const ForceGraph = ({
                           {/* Format field name */}
                           <div className="checkboxes-container">
                             {values.map((value) => (
-                              <div key={value} className="checkbox-container">
+                              <div key={`${field}-${value}`} className="checkbox-container">
                                 <button
                                   onClick={() =>
                                     handleEdgeFilterChange(field, value)
