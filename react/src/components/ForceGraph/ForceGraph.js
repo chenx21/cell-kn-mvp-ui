@@ -30,6 +30,8 @@ import {
   collapseNode,
   clearNodeToCenter,
   updateNodePosition,
+  fetchEdgeFilterOptions,
+  updateEdgeFilter,
 } from "../../store/graphSlice";
 import { performSetOperation } from "./setOperation";
 import { useHotkeys } from "../../hooks/useHotkeys";
@@ -60,13 +62,15 @@ const ForceGraph = ({
     lastActionType,
     nodeToCenter,
     collapsed,
+    availableEdgeFilters,
+    edgeFilterStatus,
   } = present;
   const canUndo = past.length > 0;
   const canRedo = future.length > 0;
 
   // Local component state for UI and temporary flags.
   const [collections, setCollections] = useState([]);
-  const collectionMaps = new Map(collMaps.maps);
+  const collectionMaps = useMemo(() => new Map(collMaps.maps), []); // Memoizing to avoid refetching.
   const [isRestoring, setIsRestoring] = useState(false);
   const [optionsVisible, setOptionsVisible] = useState(false);
   const [activeTab, setActiveTab] = useState("general");
@@ -94,7 +98,12 @@ const ForceGraph = ({
       setCollections(parsed);
       dispatch(setAvailableCollections(parsed));
     });
-  }, [dispatch]);
+  }, [dispatch, settings.graphType]);
+
+  // Fetches available edge filter options when component mounts or graph type changes.
+  useEffect(() => {
+    dispatch(fetchEdgeFilterOptions());
+  }, [dispatch, settings.graphType]);
 
   // Applies collection filters passed via props.
   useEffect(() => {
@@ -127,6 +136,7 @@ const ForceGraph = ({
     settings.nodeLimit,
     settings.graphType,
     settings.collapseOnStart,
+    settings.edgeFilters,
     dispatch,
   ]);
 
@@ -317,6 +327,14 @@ const ForceGraph = ({
   const handleNodeDragEnd = useCallback(
     ({ nodeId, x, y }) => {
       dispatch(updateNodePosition({ nodeId, x, y }));
+    },
+    [dispatch],
+  );
+
+  // Handle filtering on edges.
+  const handleEdgeFilterChange = useCallback(
+    (field, value) => {
+      dispatch(updateEdgeFilter({ field, value }));
     },
     [dispatch],
   );
@@ -654,10 +672,10 @@ const ForceGraph = ({
             </button>
           )}
           <button
-            className={`tab-button ${activeTab === "collections" ? "active" : ""}`}
-            onClick={() => setActiveTab("collections")}
+            className={`tab-button ${activeTab === "filters" ? "active" : ""}`}
+            onClick={() => setActiveTab("filters")}
           >
-            Collections
+            Filters
           </button>
           <button
             className={`tab-button ${activeTab === "history" ? "active" : ""}`}
@@ -871,10 +889,11 @@ const ForceGraph = ({
               </div>
             )}
 
-          {activeTab === "collections" && (
+          {activeTab === "filters" && (
             <div id="tab-panel-collections" className="tab-panel active">
+              {/* collection filters */}
               <div className="option-group collection-picker">
-                <label>Active Collections:</label>
+                <label>Collection Filters:</label>
                 <div className="checkboxes-container">
                   {collections.map((collection) => (
                     <div key={collection} className="checkbox-container">
@@ -920,6 +939,52 @@ const ForceGraph = ({
                   </button>
                 </div>
               </div>
+              {/* edge filters */}
+              {edgeFilterStatus === "loading" && (
+                <div className="option-group">Loading edge filters...</div>
+              )}
+              {edgeFilterStatus === "failed" && (
+                <div className="option-group error-message">
+                  Failed to load edge filters.
+                </div>
+              )}
+              {edgeFilterStatus === "succeeded" &&
+                Object.keys(availableEdgeFilters).length > 0 && (
+                  <div className="option-group edge-filter-section">
+                    <h3>Edge Filters:</h3>
+                    {Object.entries(availableEdgeFilters).map(
+                      ([field, values]) => (
+                        <div key={field} className="edge-filter-group">
+                          <label>
+                            {field
+                              .replace(/([A-Z])/g, " $1")
+                              .replace(/^./, (str) => str.toUpperCase())}
+                            :
+                          </label>{" "}
+                          {/* Format field name */}
+                          <div className="checkboxes-container">
+                            {values.map((value) => (
+                              <div key={value} className="checkbox-container">
+                                <button
+                                  onClick={() =>
+                                    handleEdgeFilterChange(field, value)
+                                  }
+                                  className={
+                                    settings.edgeFilters[field]?.includes(value)
+                                      ? "collection-button-selected"
+                                      : "collection-button-deselected"
+                                  }
+                                >
+                                  {value}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ),
+                    )}
+                  </div>
+                )}
             </div>
           )}
 
