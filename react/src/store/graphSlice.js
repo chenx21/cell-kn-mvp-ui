@@ -223,12 +223,14 @@ const graphSlice = createSlice({
         const valueAsString = JSON.stringify(value);
         // Find index of existing array by comparing stringified values.
         const existingIndex = currentFilters.findIndex(
-          (item) => JSON.stringify(item) === valueAsString
+          (item) => JSON.stringify(item) === valueAsString,
         );
 
         if (existingIndex > -1) {
           // It exists, remove it by filtering by index.
-          newFilters = currentFilters.filter((_, index) => index !== existingIndex);
+          newFilters = currentFilters.filter(
+            (_, index) => index !== existingIndex,
+          );
         } else {
           // It does not exist, add it.
           newFilters = [...currentFilters, value];

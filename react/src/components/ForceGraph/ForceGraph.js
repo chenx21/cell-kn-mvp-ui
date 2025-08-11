@@ -36,6 +36,7 @@ import {
 import { performSetOperation } from "./setOperation";
 import { useHotkeys } from "../../hooks/useHotkeys";
 import { useHotkeyHold } from "../../hooks/useHotkeyHold";
+import FilterableDropdown from "../FilterableDropdown/FilterableDropdown";
 
 // Main React component for D3 force-directed graph, wrapped in memo for performance.
 // Orchestrates Redux state, user interactions, and D3 instance.
@@ -888,7 +889,6 @@ const ForceGraph = ({
                 </div>
               </div>
             )}
-
           {activeTab === "filters" && (
             <div id="tab-panel-collections" className="tab-panel active">
               {/* collection filters */}
@@ -939,7 +939,6 @@ const ForceGraph = ({
                   </button>
                 </div>
               </div>
-              {/* edge filters */}
               {edgeFilterStatus === "loading" && (
                 <div className="option-group">Loading edge filters...</div>
               )}
@@ -954,33 +953,15 @@ const ForceGraph = ({
                     <h3>Edge Filters:</h3>
                     {Object.entries(availableEdgeFilters).map(
                       ([field, values]) => (
-                        <div key={field} className="edge-filter-group">
-                          <label>
-                            {field
-                              .replace(/([A-Z])/g, " $1")
-                              .replace(/^./, (str) => str.toUpperCase())}
-                            :
-                          </label>{" "}
-                          {/* Format field name */}
-                          <div className="checkboxes-container">
-                            {values.map((value) => (
-                              <div key={`${field}-${value}`} className="checkbox-container">
-                                <button
-                                  onClick={() =>
-                                    handleEdgeFilterChange(field, value)
-                                  }
-                                  className={
-                                    settings.edgeFilters[field]?.includes(value)
-                                      ? "collection-button-selected"
-                                      : "collection-button-deselected"
-                                  }
-                                >
-                                  {value}
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
+                        <FilterableDropdown
+                          key={field}
+                          label={field}
+                          options={values}
+                          selectedOptions={settings.edgeFilters[field] || []}
+                          onOptionToggle={(value) =>
+                            handleEdgeFilterChange(field, value)
+                          }
+                        />
                       ),
                     )}
                   </div>
