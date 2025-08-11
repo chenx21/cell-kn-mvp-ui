@@ -2193,6 +2193,7 @@ kbd {
 .filterable-dropdown {
   position: relative;
   margin-bottom: 1em;
+  width: 100%;
 }
 
 .dropdown-input {
