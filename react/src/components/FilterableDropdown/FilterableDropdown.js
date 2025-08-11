@@ -1,32 +1,25 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 
-// Default function to get a display string if no custom one is provided.
-const defaultGetOptionLabel = (value) => {
-  if (Array.isArray(value)) {
-    return value.join(", ");
-  }
-  return String(value);
-};
-
-// Helper hook to detect clicks outside a component.
+// Hook detects clicks outside a referenced element.
 const useClickOutside = (ref, handler) => {
   useEffect(() => {
     const listener = (event) => {
-      if (!ref.current || ref.current.contains(event.target)) {
-        return;
-      }
+      if (!ref.current || ref.current.contains(event.target)) return;
       handler(event);
     };
     document.addEventListener("mousedown", listener);
-    return () => {
-      document.removeEventListener("mousedown", listener);
-    };
+    return () => document.removeEventListener("mousedown", listener);
   }, [ref, handler]);
 };
 
+// Helper function gets consistent string representation for display.
+const defaultGetOptionLabel = (value) => {
+  if (Array.isArray(value)) return value.join(", ");
+  return String(value);
+};
+
 /**
- * A searchable, multi-select dropdown component for filtering.
- * Handle duplicates, mixed data types, and space/underscore matching.
+ * Searchable, multi-select dropdown component.
  */
 const FilterableDropdown = ({
   label,
@@ -34,6 +27,7 @@ const FilterableDropdown = ({
   selectedOptions,
   onOptionToggle,
   getOptionLabel = defaultGetOptionLabel,
+  getColorForOption = () => null,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -41,21 +35,18 @@ const FilterableDropdown = ({
 
   useClickOutside(wrapperRef, () => setIsOpen(false));
 
-  // Process options to be flat, unique, and mapped to original values.
+  // Memoized, processed list of flattened, unique, and sorted options.
   const processedOptions = useMemo(() => {
     const optionMap = new Map();
     options.forEach((originalOption) => {
-      const displayString = getOptionLabel(originalOption);
       if (Array.isArray(originalOption)) {
         originalOption.forEach((subValue) => {
-          if (!optionMap.has(subValue)) {
-            optionMap.set(subValue, originalOption);
-          }
+          if (!optionMap.has(subValue)) optionMap.set(subValue, originalOption);
         });
       } else {
-        if (!optionMap.has(displayString)) {
+        const displayString = getOptionLabel(originalOption);
+        if (!optionMap.has(displayString))
           optionMap.set(displayString, originalOption);
-        }
       }
     });
     return Array.from(optionMap.entries())
@@ -65,11 +56,9 @@ const FilterableDropdown = ({
       );
   }, [options, getOptionLabel]);
 
-  // Memoized and filtered list to display in the dropdown.
+  // Memoized list of options filtered by search term.
   const filteredOptions = useMemo(() => {
-    if (!searchTerm) {
-      return processedOptions;
-    }
+    if (!searchTerm) return processedOptions;
     const normalizedSearchTerm = searchTerm.toLowerCase();
     return processedOptions.filter((option) => {
       const normalizedOptionDisplay = option.display
@@ -79,7 +68,7 @@ const FilterableDropdown = ({
     });
   }, [processedOptions, searchTerm]);
 
-  // Helper to check if an option is selected.
+  // Helper function checks if an option is currently selected.
   const isSelected = (option) => {
     const originalValue = option.original;
     if (Array.isArray(originalValue)) {
@@ -105,15 +94,26 @@ const FilterableDropdown = ({
       {isOpen && (
         <ul className="dropdown-list">
           {filteredOptions.length > 0 ? (
-            filteredOptions.map((option) => (
-              <li
-                key={option.display}
-                className={`dropdown-item ${isSelected(option) ? "selected" : ""}`}
-                onClick={() => onOptionToggle(option.original)}
-              >
-                {option.display}
-              </li>
-            ))
+            filteredOptions.map((option) => {
+              // Get color for this list item.
+              const color = getColorForOption(option.original);
+              return (
+                <li
+                  key={option.display}
+                  className={`dropdown-item ${isSelected(option) ? "selected" : ""}`}
+                  onClick={() => onOptionToggle(option.original)}
+                >
+                  {/* Render color swatch if color exists. */}
+                  {color && (
+                    <span
+                      className="color-swatch"
+                      style={{ backgroundColor: color }}
+                    />
+                  )}
+                  {option.display}
+                </li>
+              );
+            })
           ) : (
             <li className="dropdown-item-none">No matches found</li>
           )}
@@ -121,17 +121,30 @@ const FilterableDropdown = ({
       )}
 
       <div className="selected-options-pills">
-        {selectedOptions.map((originalOption) => (
-          <div key={getOptionLabel(originalOption)} className="pill">
-            {getOptionLabel(originalOption)}
-            <button
-              className="pill-remove"
-              onClick={() => onOptionToggle(originalOption)}
-            >
-              &times;
-            </button>
-          </div>
-        ))}
+        {selectedOptions.map((originalOption) => {
+          // Get color for this pill item.
+          const color = getColorForOption(originalOption);
+          return (
+            <div key={getOptionLabel(originalOption)} className="pill">
+              {/* Render color swatch if color exists. */}
+              {color && (
+                <span
+                  className="color-swatch"
+                  style={{ backgroundColor: color }}
+                />
+              )}
+              <span className="pill-text">
+                {getOptionLabel(originalOption)}
+              </span>
+              <button
+                className="pill-remove"
+                onClick={() => onOptionToggle(originalOption)}
+              >
+                &times;
+              </button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

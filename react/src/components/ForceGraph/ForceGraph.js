@@ -892,7 +892,7 @@ const ForceGraph = ({
           {activeTab === "filters" && (
             <div id="tab-panel-collections" className="tab-panel active">
               {/* Collection Filters */}
-              <div className="option-group collection-picker">
+              <div className="collection-picker">
                 <h3>Collection Filters:</h3>
                 <FilterableDropdown
                   key="collection-filter"
@@ -904,6 +904,11 @@ const ForceGraph = ({
                     collectionMaps.has(collectionId)
                       ? collectionMaps.get(collectionId)["display_name"]
                       : collectionId
+                  }
+                  getColorForOption={(collectionId) =>
+                    collectionMaps.has(collectionId)
+                      ? collectionMaps.get(collectionId)["color"]
+                      : null
                   }
                 />
               </div>
@@ -918,7 +923,7 @@ const ForceGraph = ({
               )}
               {edgeFilterStatus === "succeeded" &&
                 Object.keys(availableEdgeFilters).length > 0 && (
-                  <div className="option-group edge-filter-section">
+                  <div className="edge-filter-section">
                     <h3>Edge Filters:</h3>
                     {Object.entries(availableEdgeFilters).map(
                       ([field, values]) => (
