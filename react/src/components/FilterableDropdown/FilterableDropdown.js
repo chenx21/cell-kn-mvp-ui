@@ -26,7 +26,7 @@ const getDisplayString = (value) => {
 
 /**
  * A searchable, multi-select dropdown component for filtering.
- * Handle duplicates and mixed data types (strings/arrays).
+ * Handle duplicates, mixed data types, and space/underscore matching.
  */
 const FilterableDropdown = ({
   label,
@@ -44,28 +44,19 @@ const FilterableDropdown = ({
   // Process options to be flat, unique, and mapped to original values.
   const processedOptions = useMemo(() => {
     const optionMap = new Map();
-
-    // Flatten and map options.
     options.forEach((originalOption) => {
       if (Array.isArray(originalOption)) {
-        // If option is an array, treat each item as a separate choice.
         originalOption.forEach((subValue) => {
-          // The key is the display string, value is the original option for dispatching.
           optionMap.set(subValue, originalOption);
         });
       } else {
-        // If option is a string, it maps to itself.
         const displayString = getDisplayString(originalOption);
         optionMap.set(displayString, originalOption);
       }
     });
-
-    // Convert map to an array of objects and sort alphabetically.
     return Array.from(optionMap.entries())
       .map(([display, original]) => ({ display, original }))
-      .sort((a, b) =>
-        a.display.toLowerCase().localeCompare(b.display.toLowerCase()),
-      );
+      .sort((a, b) => a.display.toLowerCase().localeCompare(b.display.toLowerCase()));
   }, [options]);
 
   // Memoized and filtered list to display in the dropdown.
@@ -73,19 +64,27 @@ const FilterableDropdown = ({
     if (!searchTerm) {
       return processedOptions;
     }
-    return processedOptions.filter((option) =>
-      option.display.toLowerCase().includes(searchTerm.toLowerCase()),
-    );
+
+    // Normalize the user's search term.
+    const normalizedSearchTerm = searchTerm.toLowerCase();
+
+    return processedOptions.filter((option) => {
+      // Normalize the option's display text by replacing underscores with spaces.
+      const normalizedOptionDisplay = option.display
+        .toLowerCase()
+        .replaceAll("_", " ");
+
+      // Perform the inclusion check on the normalized strings.
+      return normalizedOptionDisplay.includes(normalizedSearchTerm);
+    });
   }, [processedOptions, searchTerm]);
 
-  // Helper to check if an option's original value is in the selected list.
+  // Helper to check if an option is selected.
   const isSelected = (option) => {
     const originalValue = option.original;
     if (Array.isArray(originalValue)) {
       const optAsString = JSON.stringify(originalValue);
-      return selectedOptions.some(
-        (item) => JSON.stringify(item) === optAsString,
-      );
+      return selectedOptions.some(item => JSON.stringify(item) === optAsString);
     }
     return selectedOptions.includes(originalValue);
   };
@@ -109,11 +108,9 @@ const FilterableDropdown = ({
                 key={option.display}
                 className={`dropdown-item ${isSelected(option) ? "selected" : ""}`}
                 onClick={() => {
-                  /* Dispatch the original value (string or array). */
                   onOptionToggle(option.original);
                 }}
               >
-                {/* Show the clean, flattened display string. */}
                 {option.display}
               </li>
             ))
