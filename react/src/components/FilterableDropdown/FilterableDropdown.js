@@ -16,7 +16,7 @@ const useClickOutside = (ref, handler) => {
   }, [ref, handler]);
 };
 
-// Helper function to get a consistent string representation for sorting and display.
+// Helper function to get a consistent string representation for display.
 const getDisplayString = (value) => {
   if (Array.isArray(value)) {
     return value.join(", ");
@@ -26,6 +26,7 @@ const getDisplayString = (value) => {
 
 /**
  * A searchable, multi-select dropdown component for filtering.
+ * Handle duplicates and mixed data types (strings/arrays).
  */
 const FilterableDropdown = ({
   label,
@@ -40,33 +41,53 @@ const FilterableDropdown = ({
   // Close dropdown when clicking outside.
   useClickOutside(wrapperRef, () => setIsOpen(false));
 
-  // Memoized, sorted, and filtered list of options to display.
-  const filteredOptions = useMemo(() => {
-    // Sort options: handles strings and arrays of strings.
-    const sorted = [...options].sort((a, b) => {
-      const valA = getDisplayString(a).toLowerCase();
-      const valB = getDisplayString(b).toLowerCase();
-      return valA.localeCompare(valB);
+  // Process options to be flat, unique, and mapped to original values.
+  const processedOptions = useMemo(() => {
+    const optionMap = new Map();
+
+    // Flatten and map options.
+    options.forEach((originalOption) => {
+      if (Array.isArray(originalOption)) {
+        // If option is an array, treat each item as a separate choice.
+        originalOption.forEach((subValue) => {
+          // The key is the display string, value is the original option for dispatching.
+          optionMap.set(subValue, originalOption);
+        });
+      } else {
+        // If option is a string, it maps to itself.
+        const displayString = getDisplayString(originalOption);
+        optionMap.set(displayString, originalOption);
+      }
     });
 
-    // Filter by search term if one exists.
-    if (!searchTerm) {
-      return sorted;
-    }
-    return sorted.filter((option) =>
-      getDisplayString(option).toLowerCase().includes(searchTerm.toLowerCase()),
-    );
-  }, [options, searchTerm]);
+    // Convert map to an array of objects and sort alphabetically.
+    return Array.from(optionMap.entries())
+      .map(([display, original]) => ({ display, original }))
+      .sort((a, b) =>
+        a.display.toLowerCase().localeCompare(b.display.toLowerCase()),
+      );
+  }, [options]);
 
-  // Helper to check if an option is selected.
+  // Memoized and filtered list to display in the dropdown.
+  const filteredOptions = useMemo(() => {
+    if (!searchTerm) {
+      return processedOptions;
+    }
+    return processedOptions.filter((option) =>
+      option.display.toLowerCase().includes(searchTerm.toLowerCase()),
+    );
+  }, [processedOptions, searchTerm]);
+
+  // Helper to check if an option's original value is in the selected list.
   const isSelected = (option) => {
-    if (Array.isArray(option)) {
-      const optAsString = JSON.stringify(option);
+    const originalValue = option.original;
+    if (Array.isArray(originalValue)) {
+      const optAsString = JSON.stringify(originalValue);
       return selectedOptions.some(
         (item) => JSON.stringify(item) === optAsString,
       );
     }
-    return selectedOptions.includes(option);
+    return selectedOptions.includes(originalValue);
   };
 
   return (
@@ -85,15 +106,15 @@ const FilterableDropdown = ({
           {filteredOptions.length > 0 ? (
             filteredOptions.map((option) => (
               <li
-                key={getDisplayString(option)}
+                key={option.display}
                 className={`dropdown-item ${isSelected(option) ? "selected" : ""}`}
                 onClick={() => {
-                  onOptionToggle(option);
-                  // Optional: clear search term after selection.
-                  // setSearchTerm("");
+                  /* Dispatch the original value (string or array). */
+                  onOptionToggle(option.original);
                 }}
               >
-                {getDisplayString(option)}
+                {/* Show the clean, flattened display string. */}
+                {option.display}
               </li>
             ))
           ) : (
@@ -102,14 +123,14 @@ const FilterableDropdown = ({
         </ul>
       )}
 
-      {/* Display selected options below input */}
+      {/* Display selected options as "pills" below the input */}
       <div className="selected-options-pills">
-        {selectedOptions.map((option) => (
-          <div key={getDisplayString(option)} className="pill">
-            {getDisplayString(option)}
+        {selectedOptions.map((originalOption) => (
+          <div key={getDisplayString(originalOption)} className="pill">
+            {getDisplayString(originalOption)}
             <button
               className="pill-remove"
-              onClick={() => onOptionToggle(option)}
+              onClick={() => onOptionToggle(originalOption)}
             >
               &times;
             </button>
