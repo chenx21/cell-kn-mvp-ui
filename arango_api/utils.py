@@ -56,6 +56,7 @@ def get_graph(
     filter_conditions = []
     bind_vars = {}
 
+    # Create filter clause.
     if edge_filters:
         for field, values in edge_filters.items():
             # Only add filter if they exist.
@@ -63,8 +64,7 @@ def get_graph(
                 bind_key = f"allowed_{field}"
                 bind_vars[bind_key] = values
 
-                # AQL matches if field is a string,
-                # OR if field is an array that intersects.
+                # AQL matches if field is a string OR if field is an array that intersects.
                 condition = f"""
                   (
                     (IS_STRING(e.`{field}`) AND e.`{field}` IN @{bind_key}) OR 
@@ -73,7 +73,7 @@ def get_graph(
                 """
                 filter_conditions.append(condition)
 
-    # Join filter conditions
+    # Join filter conditions.
     edge_filter_clause = ""
     if filter_conditions:
         # Join individual filter conditions with AND.
@@ -81,7 +81,7 @@ def get_graph(
         # Always allow starting node (where e is null) OR apply full logic.
         edge_filter_clause = f"FILTER e == null OR ({full_filter_logic})"
 
-    # AQL Query
+    # AQL query.
     query = f"""
             LET temp = FLATTEN(
               FOR node_id IN @node_ids
