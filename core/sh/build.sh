@@ -123,7 +123,7 @@ fi
 . conf/$CONF
 
 # Build ontology graph, if specified
-pushd "../../../cell-kn-mvp-etl-results/cell-kn-mvp-etl-ontologies"
+pushd "../../../cell-kn-mvp-etl-ontologies"
 if [ ! -f ".built" ] && [ $run_ontology == 1 ] \
        || [ $force_ontology == 1 ]; then
 
@@ -172,7 +172,7 @@ fi
 popd
 
 # Build results and phenotype graphs, if specified
-pushd "../../../cell-kn-mvp-etl-results"
+pushd "../../../"
 if [ ! -f ".built" ] && [ $run_results == 1 ] \
        || [ $force_results == 1 ]; then
 
@@ -231,7 +231,7 @@ archive+="-$CELL_KN_MVP_ETL_RESULTS_VERSION"
 archive+=".tar.gz"
 
 # Make ArangoDB archive, if specified
-pushd "../../../cell-kn-mvp-etl-results/cell-kn-mvp-etl-ontologies"
+pushd "../../../cell-kn-mvp-etl-ontologies"
 if [ ! -f ".archived" ] && [ $make_archive == 1 ] \
        || [ $force_archive == 1 ]; then
 
@@ -252,7 +252,7 @@ fi
 popd
 
 # Upload ArangoDB archive, if specified
-pushd "../../../cell-kn-mvp-etl-results/cell-kn-mvp-etl-ontologies"
+pushd "../../../cell-kn-mvp-etl-ontologies"
 if [ $upload_archive == 1 ]; then
 
     # Upload the archive to cell-kn-mvp.org and cell-kn-stg.org, if it exists
