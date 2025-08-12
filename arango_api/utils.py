@@ -83,8 +83,10 @@ def get_graph(
 
     # AQL query.
     query = f"""
+            // Create temp variable for paths for each origin node
             LET temp = FLATTEN(
               FOR node_id IN @node_ids
+                // For each origin, collect up to @node_limit paths
                 LET paths = (
                   FOR v, e, p IN 0..@depth {edge_direction} node_id GRAPH @graph_name
                     OPTIONS {{ 
