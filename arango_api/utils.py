@@ -53,7 +53,7 @@ def get_graph(
     graph,
     edge_filters=None,
 ):
-    filter_logic_parts = []
+    filter_conditions = []
     bind_vars = {}
 
     if edge_filters:
@@ -71,17 +71,17 @@ def get_graph(
                     (IS_ARRAY(e.`{field}`) AND LENGTH(INTERSECTION(e.`{field}`, @{bind_key})) > 0)
                   )
                 """
-                filter_logic_parts.append(condition)
+                filter_conditions.append(condition)
 
-    # AQL Query
+    # Join filter conditions
     edge_filter_clause = ""
-    if filter_logic_parts:
+    if filter_conditions:
         # Join individual filter conditions with AND.
-        full_filter_logic = " AND ".join(filter_logic_parts)
+        full_filter_logic = " AND ".join(filter_conditions)
         # Always allow starting node (where e is null) OR apply full logic.
         edge_filter_clause = f"FILTER e == null OR ({full_filter_logic})"
 
-    # Final query with injectable filter clause.
+    # AQL Query
     query = f"""
             LET temp = FLATTEN(
               FOR node_id IN @node_ids
@@ -95,6 +95,7 @@ def get_graph(
                     LIMIT @node_limit
                     RETURN {{ node: v, link: e, path: p, depth: LENGTH(p.vertices) }}
                 )
+                // Attach the origin node_id to each returned path
                 RETURN (
                   FOR path IN paths
                     RETURN MERGE(path, {{ origin: node_id }})
@@ -144,7 +145,8 @@ def get_graph(
         {
             "node_ids": node_ids,
             "graph_name": graph_name,
-            "depth": int(depth) + 1,
+            "depth": int(depth)
+            + 1,  # Depth is increased by one to find all edges that connect to final nodes.
             "allowed_collections": allowed_collections,
             "node_limit": node_limit,
         }
