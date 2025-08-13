@@ -524,7 +524,7 @@ function ForceGraphConstructor(
     })
     .on("start", mergedOptions.interactionCallback);
 
-  // Attach the zoom handler and set the initial transform. This will now work correctly.
+  // Attach the zoom handler and set the initial transform.
   svg.call(zoomHandler);
   svg.call(
     zoomHandler.transform,
