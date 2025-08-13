@@ -634,6 +634,10 @@ function ForceGraphConstructor(
   // Internal data storage for nodes and links.
   let processedNodes = [];
   let processedLinks = [];
+  // Internal state to track if the simulation is in 'live' mode.
+  let isLiveSimulationRunning = false;
+  // Internal state to store label visibility before starting 'live' mode.
+  let labelStatesBeforeLiveSim = null;
 
   // Initial render on construction.
   updateGraph({
@@ -1009,6 +1013,8 @@ function ForceGraphConstructor(
     waitForAlpha(simulation, newThreshold).then(() => {
       // Freeze graph once stable.
       runSimulation(false, simulation, forceNode, forceCenter, forceLink);
+      // Ensure the live simulation flag is reset after auto-stabilization.
+      isLiveSimulationRunning = false;
 
       // Perform post-simulation actions.
       if (centerNodeId) {
@@ -1047,18 +1053,56 @@ function ForceGraphConstructor(
     toggleLabels,
     centerOnNode,
     resize,
-    toggleSimulation: (on) => {
-      runSimulation(
-        on,
-        simulation,
-        forceNode,
-        forceCenter,
-        forceLink,
-        processedLinks,
-        mergedOptions.nodeForceStrength,
-        mergedOptions.centerForceStrength,
-        linkForceStrength,
-      );
+    toggleSimulation: (on, currentLabelStates = {}) => {
+      if (on) {
+        // If simulation is already live, do nothing.
+        if (isLiveSimulationRunning) return;
+        isLiveSimulationRunning = true;
+
+        // Store the current label states before hiding them.
+        labelStatesBeforeLiveSim = { ...currentLabelStates };
+
+        // Hide all labels for performance.
+        Object.keys(labelStatesBeforeLiveSim).forEach((labelClass) => {
+          toggleLabels(false, labelClass);
+        });
+
+        // Start the simulation.
+        runSimulation(
+          true,
+          simulation,
+          forceNode,
+          forceCenter,
+          forceLink,
+          processedLinks,
+          mergedOptions.nodeForceStrength,
+          mergedOptions.centerForceStrength,
+          linkForceStrength,
+        );
+      } else {
+        // Stop the simulation.
+        isLiveSimulationRunning = false;
+        runSimulation(
+          false,
+          simulation,
+          forceNode,
+          forceCenter,
+          forceLink,
+          processedLinks,
+          mergedOptions.nodeForceStrength,
+          mergedOptions.centerForceStrength,
+          linkForceStrength,
+        );
+
+        // Restore the labels to their previous state if a state was saved.
+        if (labelStatesBeforeLiveSim) {
+          Object.keys(labelStatesBeforeLiveSim).forEach((labelClass) => {
+            toggleLabels(labelStatesBeforeLiveSim[labelClass], labelClass);
+          });
+          // Clear the saved state.
+          labelStatesBeforeLiveSim = null;
+        }
+      }
     },
   };
 }
