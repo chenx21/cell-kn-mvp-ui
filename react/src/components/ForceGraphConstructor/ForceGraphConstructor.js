@@ -636,6 +636,8 @@ function ForceGraphConstructor(
   let processedLinks = [];
   // Internal state to track if the simulation is in 'live' mode.
   let isLiveSimulationRunning = false;
+  // Internal state to store label visibility before starting 'live' mode.
+  let labelStatesBeforeLiveSim = null;
 
   // Initial render on construction.
   updateGraph({
@@ -1051,25 +1053,56 @@ function ForceGraphConstructor(
     toggleLabels,
     centerOnNode,
     resize,
-    toggleSimulation: (on) => {
-      // Prevents re-running the simulation if it is already in the desired state.
+    toggleSimulation: (on, currentLabelStates = {}) => {
       if (on) {
+        // If simulation is already live, do nothing.
         if (isLiveSimulationRunning) return;
         isLiveSimulationRunning = true;
+
+        // Store the current label states before hiding them.
+        labelStatesBeforeLiveSim = { ...currentLabelStates };
+
+        // Hide all labels for performance.
+        Object.keys(labelStatesBeforeLiveSim).forEach((labelClass) => {
+          toggleLabels(false, labelClass);
+        });
+
+        // Start the simulation.
+        runSimulation(
+          true,
+          simulation,
+          forceNode,
+          forceCenter,
+          forceLink,
+          processedLinks,
+          mergedOptions.nodeForceStrength,
+          mergedOptions.centerForceStrength,
+          linkForceStrength,
+        );
       } else {
+        // Stop the simulation.
         isLiveSimulationRunning = false;
+        runSimulation(
+          false,
+          simulation,
+          forceNode,
+          forceCenter,
+          forceLink,
+          processedLinks,
+          mergedOptions.nodeForceStrength,
+          mergedOptions.centerForceStrength,
+          linkForceStrength,
+        );
+
+        // Restore the labels to their previous state if a state was saved.
+        if (labelStatesBeforeLiveSim) {
+          Object.keys(labelStatesBeforeLiveSim).forEach((labelClass) => {
+            toggleLabels(labelStatesBeforeLiveSim[labelClass], labelClass);
+          });
+          // Clear the saved state.
+          labelStatesBeforeLiveSim = null;
+        }
       }
-      runSimulation(
-        on,
-        simulation,
-        forceNode,
-        forceCenter,
-        forceLink,
-        processedLinks,
-        mergedOptions.nodeForceStrength,
-        mergedOptions.centerForceStrength,
-        linkForceStrength,
-      );
     },
   };
 }

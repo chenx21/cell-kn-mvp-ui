@@ -373,10 +373,12 @@ const ForceGraph = ({
 
   // Hold hotkey configuration for toggleSimulation
   const handleSimulationOn = useCallback(() => {
-    graphInstanceRef.current?.toggleSimulation(true);
-  }, []);
+    // Pass the current label states when turning the simulation on.
+    graphInstanceRef.current?.toggleSimulation(true, settings.labelStates);
+  }, [settings.labelStates]); // Dependency added to ensure current state is used.
 
   const handleSimulationOff = useCallback(() => {
+    // No need to pass state when turning off; the D3 instance will restore it.
     graphInstanceRef.current?.toggleSimulation(false);
   }, []);
 
