@@ -375,6 +375,7 @@ function ForceGraphConstructor(
     nodeHover: (d) => d.label || d._id,
     nodeFontSize: 10,
     linkFontSize: 10,
+    minVisibleFontSize: 7,
     onNodeClick: () => {},
     onNodeDragEnd: () => {},
     interactionCallback: () => {},
@@ -468,22 +469,67 @@ function ForceGraphConstructor(
 
   const g = svg.append("g");
 
+  // Create dedicated containers for links and nodes.
+  const linkContainer = g.append("g").attr("class", "link-container");
+  const nodeContainer = g.append("g").attr("class", "node-container");
+
+  // Internal state to store the user's explicit label visibility choices.
+  let currentLabelStates = { ...mergedOptions.initialLabelStates };
+
+  // Centralized function to manage label visibility based on zoom and user settings.
+  function updateLabelVisibilityOnZoom(k) {
+    // Calculate the zoom threshold needed to meet the minimum visible font size.
+    const nodeLabelThreshold =
+      mergedOptions.minVisibleFontSize / mergedOptions.nodeFontSize;
+    const linkLabelThreshold =
+      mergedOptions.minVisibleFontSize / mergedOptions.linkFontSize;
+
+    // Helper function to apply visibility to the DOM.
+    const setVisibility = (selector, container, shouldShow) => {
+      container
+        .selectAll(selector)
+        .style("display", shouldShow ? "block" : "none");
+    };
+
+    // A label is shown only if its user-toggle is on and the zoom scale is above its threshold.
+    setVisibility(
+      ".node-label",
+      nodeContainer,
+      currentLabelStates["node-label"] && k >= nodeLabelThreshold,
+    );
+    setVisibility(
+      ".collection-label",
+      nodeContainer,
+      currentLabelStates["collection-label"] && k >= nodeLabelThreshold,
+    );
+    setVisibility(
+      ".link-label",
+      linkContainer,
+      currentLabelStates["link-label"] && k >= linkLabelThreshold,
+    );
+    setVisibility(
+      ".link-source",
+      linkContainer,
+      currentLabelStates["link-source"] && k >= linkLabelThreshold,
+    );
+  }
+
   // Setup zoom and pan behavior.
   const zoomHandler = d3
     .zoom()
     .on("zoom", (event) => {
       g.attr("transform", event.transform);
+      // Update label visibility every time zoom changes.
+      updateLabelVisibilityOnZoom(event.transform.k);
     })
     .on("start", mergedOptions.interactionCallback);
+
+  // Attach the zoom handler and set the initial transform.
   svg.call(zoomHandler);
   svg.call(
     zoomHandler.transform,
     d3.zoomIdentity.translate(0, 0).scale(mergedOptions.initialScale),
   );
-
-  // Create dedicated containers for links and nodes.
-  const linkContainer = g.append("g").attr("class", "link-container");
-  const nodeContainer = g.append("g").attr("class", "node-container");
 
   // Define arrow markers for link directions.
   const defs = g.append("defs");
@@ -634,6 +680,10 @@ function ForceGraphConstructor(
   // Internal data storage for nodes and links.
   let processedNodes = [];
   let processedLinks = [];
+  // Internal state to track if the simulation is in 'live' mode.
+  let isLiveSimulationRunning = false;
+  // Internal state to store label visibility before starting 'live' mode.
+  let labelStatesBeforeLiveSim = null;
 
   // Initial render on construction.
   updateGraph({
@@ -759,19 +809,13 @@ function ForceGraphConstructor(
       .call(zoomHandler.transform, newTransform);
   }
 
-  // Shows or hides a specified class of labels.
+  // Public function for React to set the user's preference for label visibility.
   function toggleLabels(show, labelClass) {
-    const containerMap = {
-      "link-label": linkContainer,
-      "link-source": linkContainer,
-      "node-label": nodeContainer,
-      "collection-label": nodeContainer,
-    };
-    const container = containerMap[labelClass];
-    if (!container) return;
-    container
-      .selectAll(`.${labelClass}`)
-      .style("display", show ? "block" : "none");
+    if (typeof currentLabelStates[labelClass] !== "undefined") {
+      currentLabelStates[labelClass] = show;
+    }
+    // Immediately apply the new visibility rule based on the current zoom.
+    updateLabelVisibilityOnZoom(d3.zoomTransform(svg.node()).k);
   }
 
   // Updates font size for all node labels.
@@ -780,6 +824,9 @@ function ForceGraphConstructor(
     nodeContainer
       .selectAll("text.node-label, text.collection-label")
       .style("font-size", newFontSize + "px");
+
+    // Re-evaluate label visibility since the threshold has changed.
+    updateLabelVisibilityOnZoom(d3.zoomTransform(svg.node()).k);
   }
 
   // Updates font size for all link labels.
@@ -788,6 +835,9 @@ function ForceGraphConstructor(
     linkContainer
       .selectAll("text.link-label", "text.link-source")
       .style("font-size", newFontSize + "px");
+
+    // Re-evaluate label visibility since the threshold has changed.
+    updateLabelVisibilityOnZoom(d3.zoomTransform(svg.node()).k);
   }
 
   // Clears all nodes and links from graph.
@@ -808,6 +858,8 @@ function ForceGraphConstructor(
   // Fixes node positions initially to prevent simulation drift on restore.
   function restoreGraph({ nodes, links, labelStates }) {
     resetGraph(false);
+    // Sync internal label state with restored state.
+    currentLabelStates = { ...labelStates };
 
     processedNodes = processGraphData(
       processedNodes,
@@ -867,10 +919,8 @@ function ForceGraphConstructor(
       node.fy = null;
     });
 
-    // Restore previous label visibility states.
-    Object.keys(labelStates).forEach((key) => {
-      toggleLabels(labelStates[key], key);
-    });
+    // Use the zoom-aware function to set initial label visibility.
+    updateLabelVisibilityOnZoom(d3.zoomTransform(svg.node()).k);
   }
 
   // Identifies leaf nodes connected only to a single neighbor from collapse list.
@@ -922,6 +972,8 @@ function ForceGraphConstructor(
     if (resetData) {
       resetGraph();
     }
+    // Sync internal label state with incoming state.
+    currentLabelStates = { ...labelStates };
 
     // Process and merge new data into internal state.
     processedNodes = processGraphData(
@@ -1009,14 +1061,16 @@ function ForceGraphConstructor(
     waitForAlpha(simulation, newThreshold).then(() => {
       // Freeze graph once stable.
       runSimulation(false, simulation, forceNode, forceCenter, forceLink);
+      // Ensure the live simulation flag is reset after auto-stabilization.
+      isLiveSimulationRunning = false;
 
       // Perform post-simulation actions.
       if (centerNodeId) {
         centerOnNode(centerNodeId);
       }
-      Object.keys(labelStates).forEach((key) => {
-        toggleLabels(labelStates[key], key);
-      });
+
+      // Use the zoom-aware function to set final label visibility.
+      updateLabelVisibilityOnZoom(d3.zoomTransform(svg.node()).k);
 
       // Save final state if required.
       if (
@@ -1047,18 +1101,61 @@ function ForceGraphConstructor(
     toggleLabels,
     centerOnNode,
     resize,
-    toggleSimulation: (on) => {
-      runSimulation(
-        on,
-        simulation,
-        forceNode,
-        forceCenter,
-        forceLink,
-        processedLinks,
-        mergedOptions.nodeForceStrength,
-        mergedOptions.centerForceStrength,
-        linkForceStrength,
-      );
+    toggleSimulation: (on, incomingLabelStates = {}) => {
+      if (on) {
+        // If simulation is already live, do nothing.
+        if (isLiveSimulationRunning) return;
+        isLiveSimulationRunning = true;
+
+        // Store the current label states before hiding them.
+        labelStatesBeforeLiveSim = { ...incomingLabelStates };
+
+        // Hide all labels for performance by directly manipulating the DOM.
+        Object.keys(labelStatesBeforeLiveSim).forEach((labelClass) => {
+          const container = labelClass.includes("node")
+            ? nodeContainer
+            : linkContainer;
+          container.selectAll(`.${labelClass}`).style("display", "none");
+        });
+
+        // Start the simulation.
+        runSimulation(
+          true,
+          simulation,
+          forceNode,
+          forceCenter,
+          forceLink,
+          processedLinks,
+          mergedOptions.nodeForceStrength,
+          mergedOptions.centerForceStrength,
+          linkForceStrength,
+        );
+      } else {
+        // Stop the simulation.
+        isLiveSimulationRunning = false;
+        runSimulation(
+          false,
+          simulation,
+          forceNode,
+          forceCenter,
+          forceLink,
+          processedLinks,
+          mergedOptions.nodeForceStrength,
+          mergedOptions.centerForceStrength,
+          linkForceStrength,
+        );
+
+        // Restore the labels to their previous state if a state was saved.
+        if (labelStatesBeforeLiveSim) {
+          // Update the main state tracker to what it was before the sim.
+          currentLabelStates = { ...labelStatesBeforeLiveSim };
+          // Clear the temporary saved state.
+          labelStatesBeforeLiveSim = null;
+        }
+
+        // After stopping, immediately apply zoom-based visibility rules.
+        updateLabelVisibilityOnZoom(d3.zoomTransform(svg.node()).k);
+      }
     },
   };
 }
