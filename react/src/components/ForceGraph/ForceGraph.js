@@ -37,6 +37,8 @@ import { performSetOperation } from "./performSetOperation";
 import { useHotkeys } from "../../hooks/useHotkeys";
 import { useHotkeyHold } from "../../hooks/useHotkeyHold";
 import FilterableDropdown from "../FilterableDropdown/FilterableDropdown";
+import { saveGraph } from "../../store/savedGraphsSlice";
+import LoadGraphModal from "../LoadGraphModal/LoadGraphModal";
 
 // Main React component for D3 force-directed graph, wrapped in memo for performance.
 // Orchestrates Redux state, user interactions, and D3 instance.
@@ -86,6 +88,7 @@ const ForceGraph = ({
     nodeLabel: null,
     position: { x: 0, y: 0 },
   });
+  const [isLoadModalOpen, setIsLoadModalOpen] = useState(false);
 
   // Initializes or resets graph based on props or cart.
   useEffect(() => {
@@ -177,7 +180,7 @@ const ForceGraph = ({
     const graphInstance = graphInstanceRef.current;
 
     // Handles state restoration for undo/redo actions.
-    if (isRestoring === true) {
+    if (isRestoring === true || lastActionType == "loadGraph") {
       if (graphInstance) {
         graphInstance.restoreGraph({
           nodes: graphData.nodes,
@@ -363,8 +366,25 @@ const ForceGraph = ({
     dispatch(ActionCreators.redo());
   };
 
-  const handleSave = useCallback(() => console.log("Save triggered."), []);
-  const handleLoad = useCallback(() => console.log("Load triggered."), []);
+  const handleSave = useCallback(() => {
+    const graphName = window.prompt("Please enter a name for your graph:");
+    if (graphName) {
+      // Dispatch the saveGraph action with the current state.
+      dispatch(
+        saveGraph({
+          name: graphName,
+          originNodeIds: originNodeIds,
+          settings: settings,
+          graphData: graphData,
+        }),
+      );
+      alert(`Graph "${graphName}" saved successfully!`);
+    }
+  }, [dispatch, originNodeIds, settings, graphData]);
+
+  const handleLoad = useCallback(() => {
+    setIsLoadModalOpen(true);
+  }, []);
 
   // Memoizes hotkey configuration for undo, redo, save, and load.
   const hotkeyConfigs = useMemo(
@@ -855,15 +875,15 @@ const ForceGraph = ({
               </div>
 
               <div className="option-group">
-                {/*<label>Saved Graphs</label>*/}
-                {/*<div className="save-load-controls">*/}
-                {/*  <button onClick={handleSave}>*/}
-                {/*    Save Current Graph <kbd>{isMac ? "⌘S" : "Ctrl+S"}</kbd>*/}
-                {/*  </button>*/}
-                {/*  <button onClick={handleLoad}>*/}
-                {/*    Load a Saved Graph <kbd>{isMac ? "⌘O" : "Ctrl+O"}</kbd>*/}
-                {/*  </button>*/}
-                {/*</div>*/}
+                <label>Saved Graphs</label>
+                <div className="save-load-controls">
+                  <button onClick={handleSave}>
+                    Save Current Graph <kbd>{isMac ? "⌘S" : "Ctrl+S"}</kbd>
+                  </button>
+                  <button onClick={handleLoad}>
+                    Load a Saved Graph <kbd>{isMac ? "⌘O" : "Ctrl+O"}</kbd>
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -973,6 +993,11 @@ const ForceGraph = ({
           )}
         </div>
       </div>
+      {/* Render the modal for loading graphs */}
+      <LoadGraphModal
+        isOpen={isLoadModalOpen}
+        onClose={() => setIsLoadModalOpen(false)}
+      />
     </div>
   );
 };

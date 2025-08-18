@@ -278,6 +278,16 @@ const graphSlice = createSlice({
       state.nodeToCenter = null;
       state.lastActionType = "clearNodeToCenter";
     },
+    // Loads graph into state
+    loadGraph: (state, action) => {
+      const { originNodeIds, settings, graphData } = action.payload;
+      state.originNodeIds = originNodeIds;
+      state.settings = settings;
+      state.graphData = graphData;
+      state.status = "succeeded";
+      state.lastActionType = "loadGraph";
+      state.rawData = {};
+    },
   },
   // Reducers for handling async thunk lifecycle actions.
   extraReducers: (builder) => {
@@ -373,6 +383,7 @@ export const {
   uncollapseNode,
   collapseNode,
   updateEdgeFilter,
+  loadGraph,
 } = graphSlice.actions;
 
 // Wrap base reducer with redux-undo.

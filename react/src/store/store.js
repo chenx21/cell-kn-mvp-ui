@@ -12,24 +12,22 @@ import {
 import storage from "redux-persist/lib/storage";
 import graphReducer from "./graphSlice";
 import cartReducer from "./cartSlice";
+import savedGraphsReducer from "./savedGraphsSlice";
 
-// Configuration object for redux-persist.
 const persistConfig = {
   key: "root",
   storage,
-  whitelist: ["cart"],
+  whitelist: ["cart", "savedGraphs"],
 };
 
-// Combine all reducers into a single root reducer.
 const rootReducer = combineReducers({
   graph: graphReducer,
   cart: cartReducer,
+  savedGraphs: savedGraphsReducer,
 });
 
-// Create a new persist reducer.
 const persistedReducer = persistReducer(persistConfig, rootReducer);
 
-// Configure the store with the persisted reducer.
 export const store = configureStore({
   reducer: persistedReducer,
   middleware: (getDefaultMiddleware) =>
@@ -51,5 +49,4 @@ export const store = configureStore({
     }),
 });
 
-// Create a persistor object that will be used to wrap the application.
 export const persistor = persistStore(store);

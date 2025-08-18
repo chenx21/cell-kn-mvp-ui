@@ -60,13 +60,8 @@ const cartSlice = createSlice({
 });
 
 // Export action creators for use in components.
-export const {
-  addToCart,
-  removeFromCart,
-  clearCart,
-  setCart,
-  toggleCartItem,
-} = cartSlice.actions;
+export const { addToCart, removeFromCart, clearCart, setCart, toggleCartItem } =
+  cartSlice.actions;
 
 // Export reducer for inclusion in Redux store.
 export default cartSlice.reducer;

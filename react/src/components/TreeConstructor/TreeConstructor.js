@@ -117,7 +117,9 @@ const TreeConstructor = ({ data }) => {
         .attr("dy", "0.31em")
         .attr("x", (d) => (d._children ? -6 : 6))
         .attr("text-anchor", (d) => (d._children ? "end" : "start"))
-        .text((d) => truncateString(getLabel(d.data) || d.data._key, maxLabelLength))
+        .text((d) =>
+          truncateString(getLabel(d.data) || d.data._key, maxLabelLength),
+        )
         .attr("stroke-linejoin", "round")
         .attr("stroke-width", 3)
         .attr("stroke", "white")

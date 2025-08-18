@@ -1,4 +1,10 @@
-import React, { useContext, useEffect, useRef, useState, useCallback } from "react";
+import React, {
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+} from "react";
 import { useSelector, useDispatch } from "react-redux";
 import SelectedItemsTable from "../SelectedItemsTable/SelectedItemsTable";
 import SearchResultsTable from "../SearchResultsTable/SearchResultsTable";
@@ -46,7 +52,8 @@ const SearchBar = ({ onGenerateGraph }) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ search_term: currentSearchTerm, db: db }),
       });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
       return await response.json();
     } catch (error) {
       console.error("Error fetching search terms:", error);
@@ -91,9 +98,13 @@ const SearchBar = ({ onGenerateGraph }) => {
   // Effect to synchronize local item objects with global cart IDs.
   useEffect(() => {
     const syncObjectsWithCart = async () => {
-      const existingObjectIds = new Set(selectedItemObjects.map(item => item._id));
-      const missingIds = cartNodeIds.filter(id => !existingObjectIds.has(id));
-      const stillSelectedObjects = selectedItemObjects.filter(item => cartNodeIds.includes(item._id));
+      const existingObjectIds = new Set(
+        selectedItemObjects.map((item) => item._id),
+      );
+      const missingIds = cartNodeIds.filter((id) => !existingObjectIds.has(id));
+      const stillSelectedObjects = selectedItemObjects.filter((item) =>
+        cartNodeIds.includes(item._id),
+      );
 
       if (missingIds.length > 0) {
         const newObjects = await fetchNodeDetailsByIds(missingIds, graphType);
@@ -109,7 +120,10 @@ const SearchBar = ({ onGenerateGraph }) => {
   // Effect for handling clicks outside the component.
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target)
+      ) {
         setShowResults(false);
       }
     };
@@ -132,7 +146,7 @@ const SearchBar = ({ onGenerateGraph }) => {
 
   const handleSelectItem = (item) => {
     if (!cartNodeIds.includes(item._id)) {
-      setSelectedItemObjects(prev => [...prev, item]);
+      setSelectedItemObjects((prev) => [...prev, item]);
       dispatch(addToCart(item._id));
     }
     setShowResults(false);
@@ -160,7 +174,9 @@ const SearchBar = ({ onGenerateGraph }) => {
           />
           <SearchIcon />
         </div>
-        <div className={`search-results-dropdown ${shouldDropdownBeVisible ? "show" : ""}`}>
+        <div
+          className={`search-results-dropdown ${shouldDropdownBeVisible ? "show" : ""}`}
+        >
           <SearchResultsTable
             searchResults={searchResults}
             handleSelectItem={handleSelectItem}
