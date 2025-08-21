@@ -16,6 +16,7 @@ react/coverage/
 *.txt
 .built
 .idea
+.tern-port
 .venv
 .zshenv
 venv/
