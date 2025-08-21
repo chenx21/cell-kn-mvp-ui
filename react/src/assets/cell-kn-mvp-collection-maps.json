@@ -492,7 +492,7 @@
         "color": "#f032e6",
         "individual_labels": [
           {
-            "field_to_use": "Official_Symbol",
+            "field_to_use": "Official_symbol",
             "to_be_replaced": "",
             "replace_with": "",
             "make_lower_case": false
