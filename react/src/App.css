@@ -402,7 +402,7 @@ tr:nth-of-type(odd) {
 }
 
 /* Individual row for each search result item */
-.result-item-row {
+.result-item-row-link {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -411,15 +411,15 @@ tr:nth-of-type(odd) {
   gap: 10px;
 }
 
-.result-item-row.selectable {
+.result-item-row-link.selectable {
   cursor: pointer;
 }
 
-.result-item-row:last-child {
+.result-item-row-link:last-child {
   border-bottom: none;
 }
 
-.result-item-row:hover {
+.result-item-row-link:hover {
   background-color: var(--color-light-bg);
 }
 
@@ -2239,7 +2239,7 @@ kbd {
 .color-swatch {
   width: 12px;
   height: 12px;
-  border: 1px solid #aaa;
+  border: 1px solid var(--color-light);
   margin-right: 8px;
   flex-shrink: 0;
 }
@@ -2255,7 +2255,7 @@ kbd {
 .pill {
   display: flex;
   align-items: center;
-  background-color: #e0e0e0;
+  background-color: var(--color-white);
   border-radius: 12px;
   padding: 4px 8px;
   font-size: 0.9em;
@@ -2271,7 +2271,7 @@ kbd {
 .pill-remove {
   background: none;
   border: none;
-  color: #555;
+  color: var(--color-gray);
   font-size: 16px;
   font-weight: bold;
   line-height: 1;
@@ -2280,7 +2280,7 @@ kbd {
   flex-shrink: 0;
 }
 .pill-remove:hover {
-  color: #000;
+  color: var(--color-text);
 }
 
 .node-group .nodesSlice-button-fo {
@@ -2298,7 +2298,7 @@ kbd {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: var(--color-text);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -2306,7 +2306,7 @@ kbd {
 }
 
 .modal-content {
-  background: white;
+  background: var(--color-white);
   padding: 20px;
   border-radius: 8px;
   width: 80%;
@@ -2332,13 +2332,13 @@ kbd {
 
 .saved-graphs-list th,
 .saved-graphs-list td {
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-white);
   padding: 8px;
   text-align: left;
 }
 
 .saved-graphs-list th {
-  background-color: #f2f2f2;
+  background-color: var(--color-light);
 }
 
 .actions-cell {
@@ -2347,6 +2347,150 @@ kbd {
 }
 
 .delete-button {
-  background-color: #f44336;
+  background-color: var(--color-secondary-red);
   color: white;
+}
+
+.node-list-container {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto 2rem auto;
+}
+
+.node-list-table {
+  width: 100%;
+  border-collapse: collapse;
+  box-shadow: 0 2px 4px var(--color-gray);
+}
+
+.node-list-table th,
+.node-list-table td {
+  border: 1px solid var(--color-white);
+  padding: 12px;
+  text-align: left;
+}
+
+.node-list-table th {
+  background-color: var(--color-light);
+  font-weight: bold;
+}
+
+.node-list-table .remove-button {
+  background-color: var(--color-secondary-red);
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.node-list-table .remove-button:hover {
+  background-color: var(--color-secondary-red);
+}
+
+.graph-page-layout {
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.graph-page-header {
+  text-align: center;
+  margin-bottom: 2rem;
+  max-width: 800px;
+}
+
+.graph-actions-container {
+  margin-bottom: 2rem;
+}
+
+.generate-graph-button {
+  background-color: var(--color-main);
+  color: white;
+  padding: 14px 28px;
+  font-size: 1.2rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s, box-shadow 0.3s;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.generate-graph-button:hover {
+  background-color: var(--color-focus);
+  box-shadow: 0 6px 8px rgba(0,0,0,0.15);
+}
+
+.graph-display-area {
+  width: 100%;
+  height: 80vh;
+  border: 1px solid var(--color-white);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+.add-to-graph-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-gray);
+  background-color: transparent;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  padding: 0;
+  line-height: 0;
+}
+.add-to-graph-button .icon-container::before {
+  font-size: 1.2rem;
+  font-weight: bold;
+  transition: all 0.2s ease-in-out;
+}
+.add-to-graph-button .icon-container::before {
+  content: '+';
+  color: var(--color-main);
+}
+.add-to-graph-button:hover {
+  background-color: var(--color-main);
+  border-color: var(--color-main);
+}
+.add-to-graph-button:hover .icon-container::before {
+  color: var(--color-text-on-dark);
+}
+.add-to-graph-button.added {
+  background-color: var(--color-green-light);
+  border-color: var(--color-green-light);
+}
+.add-to-graph-button.added .icon-container::before {
+  content: '✓';
+  color: var(--color-text-on-dark);
+}
+.add-to-graph-button.added:hover {
+  background-color: var(--color-secondary-red);
+  border-color: var(--color-secondary-red);
+}
+/* Remove icon */
+.add-to-graph-button.added:hover .icon-container::before {
+  content: '−';
+}
+
+.add-to-graph-button.has-text {
+  width: auto;
+  border-radius: 20px;
+  padding: 6px 16px 6px 12px;
+}
+.add-to-graph-button.has-text .text-container {
+  margin-left: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--color-text);
+  transition: color 0.2s ease-in-out;
+}
+.add-to-graph-button.has-text:hover .text-container,
+.add-to-graph-button.has-text.added .text-container {
+  color: var(--color-text-on-dark);
 }

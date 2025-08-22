@@ -14,6 +14,7 @@ import TreePage from "./pages/TreePage/TreePage";
 import AboutPage from "./pages/AboutPage/AboutPage";
 import FTUExplorerPage from "./pages/FTUExplorerPage/FTUExplorerPage";
 import { FtuPartsProvider } from "./contexts/FTUPartsContext";
+import GraphPage from "./pages/GraphPage/GraphPage";
 
 function App() {
   return (
@@ -34,6 +35,7 @@ function App() {
                     element={<CollectionsPage />}
                   />
                   <Route path="/collections" element={<CollectionsPage />} />
+                  <Route path="/graph" element={<GraphPage />} />
                   <Route path="/ftu" element={<FTUExplorerPage />} />
                   <Route path="/aql" element={<AQLQueryPage />} />
                   <Route path="/about" element={<AboutPage />} />

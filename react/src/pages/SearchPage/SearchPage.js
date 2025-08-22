@@ -1,35 +1,14 @@
-import { useContext, useState, useRef, useEffect } from "react";
-import { useSelector } from "react-redux";
+import React from "react";
 import { Link } from "react-router-dom";
 import SearchBar from "../../components/SearchBar/SearchBar";
-import ForceGraph from "../../components/ForceGraph/ForceGraph";
-import { PrunedCollectionsContext } from "../../contexts/PrunedCollectionsContext";
 
 const SearchPage = () => {
-  // Read the origin node IDs directly from the Redux nodesSlice.
-  const nodesSliceNodeIds = useSelector((state) => state.nodesSlice.originNodeIds);
-  const prunedCollections = useContext(PrunedCollectionsContext);
-  const graphDisplayAreaRef = useRef(null);
-
-  // Local state to control the visibility of the graph component.
-  const [showGraph, setShowGraph] = useState(false);
-
-  // Effect to scroll to the graph area after the "Generate Graph" button is clicked.
-  useEffect(() => {
-    if (showGraph && graphDisplayAreaRef.current) {
-      graphDisplayAreaRef.current.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    }
-  }, [showGraph]);
-
   return (
     <div className="search-page-layout">
       <div className="main-search-box">
         <h1 className="search-page-title">Search the Knowledge Network</h1>
         <div className="search-bar-wrapper">
-          <SearchBar onGenerateGraph={() => setShowGraph(true)} />
+          <SearchBar />
         </div>
       </div>
 
@@ -51,25 +30,12 @@ const SearchPage = () => {
         </p>
         <p>
           Use the search bar above to find and explore entities within this
-          network. Selected items can be used to generate interactive graphs
-          visualizing their connections.
+          network. You can add items to your graph or navigate to their specific pages.
           <Link to="/about" className="learn-more-link internal-learn-more">
             Learn more...
           </Link>
         </p>
       </div>
-
-      {showGraph && nodesSliceNodeIds.length > 0 && (
-        <div className="graph-display-area" ref={graphDisplayAreaRef}>
-          <ForceGraph
-            settings={{
-              defaultDepth: 1,
-              findShortestPaths: false,
-              collectionsToPrune: prunedCollections,
-            }}
-          />
-        </div>
-      )}
     </div>
   );
 };

@@ -36,6 +36,13 @@ const Header = () => {
             Collections
           </h4>
         </Link>
+        <Link to="/graph">
+          <h4
+              className={activeNav.startsWith("/graph") ? "active-nav" : ""}
+          >
+            Graph
+          </h4>
+        </Link>
         <Link to="/about">
           <h4 className={activeNav.startsWith("/about") ? "active-nav" : ""}>
             About

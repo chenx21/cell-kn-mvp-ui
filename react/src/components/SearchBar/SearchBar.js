@@ -5,11 +5,8 @@ import React, {
   useState,
   useCallback,
 } from "react";
-import { useSelector, useDispatch } from "react-redux";
-import SelectedItemsTable from "../SelectedItemsTable/SelectedItemsTable";
 import SearchResultsTable from "../SearchResultsTable/SearchResultsTable";
 import { GraphContext } from "../../contexts/GraphContext";
-import { addToNodesSlice, removeFromNodesSlice } from "../../store/nodesSlice";
 import { getAllSearchableFields } from "../Utils/Utils";
 
 // SVG Icon Component
@@ -28,24 +25,17 @@ const SearchIcon = () => (
   </svg>
 );
 
-// SearchBar Component
-const SearchBar = ({ onGenerateGraph }) => {
+const SearchBar = () => {
   const containerRef = useRef(null);
   const debounceTimeoutRef = useRef(null);
-  const dispatch = useDispatch();
-
-  // State
-  const nodesSliceNodeIds = useSelector((state) => state.nodesSlice.originNodeIds);
-  const [selectedItemObjects, setSelectedItemObjects] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [input, setInput] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [showResults, setShowResults] = useState(false);
-  const [isLoading, setIsLoading] = useState(false); // For fetching node details
 
   const { graphType } = useContext(GraphContext);
 
-  // Text search
+  // Text search function
   const getSearchTerms = useCallback(async (currentSearchTerm, db) => {
     const searchableFields = getAllSearchableFields();
     try {
@@ -67,27 +57,7 @@ const SearchBar = ({ onGenerateGraph }) => {
     }
   }, []);
 
-  // Get details for nodesSlice
-  const fetchNodeDetailsByIds = useCallback(async (ids, db) => {
-    if (!ids || ids.length === 0) return [];
-    setIsLoading(true);
-    try {
-      const response = await fetch(`/arango_api/document/details`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ document_ids: ids, db: db }),
-      });
-      if (!response.ok) throw new Error(`Failed to fetch node details`);
-      return await response.json();
-    } catch (error) {
-      console.error("Error fetching node details:", error);
-      return [];
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // Effect for fetching search results when debounced search term changes.
+  // Effect for fetching search results
   useEffect(() => {
     const fetchSearchResults = async () => {
       if (searchTerm.trim() !== "") {
@@ -101,29 +71,7 @@ const SearchBar = ({ onGenerateGraph }) => {
     fetchSearchResults();
   }, [searchTerm, graphType, getSearchTerms]);
 
-  // Effect to synchronize local item objects with global nodesSlice IDs.
-  useEffect(() => {
-    const syncObjectsWithNodesSlice = async () => {
-      const existingObjectIds = new Set(
-        selectedItemObjects.map((item) => item._id),
-      );
-      const missingIds = nodesSliceNodeIds.filter((id) => !existingObjectIds.has(id));
-      const stillSelectedObjects = selectedItemObjects.filter((item) =>
-        nodesSliceNodeIds.includes(item._id),
-      );
-
-      if (missingIds.length > 0) {
-        const newObjects = await fetchNodeDetailsByIds(missingIds, graphType);
-        setSelectedItemObjects([...stillSelectedObjects, ...newObjects]);
-      } else {
-        setSelectedItemObjects(stillSelectedObjects);
-      }
-    };
-
-    syncObjectsWithNodesSlice();
-  }, [nodesSliceNodeIds, fetchNodeDetailsByIds]);
-
-  // Effect for handling clicks outside the component.
+  // Effect for handling clicks outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
@@ -140,6 +88,7 @@ const SearchBar = ({ onGenerateGraph }) => {
     };
   }, []);
 
+  // Search input handler
   const handleSearch = (event) => {
     const value = event.target.value;
     setInput(value);
@@ -150,19 +99,6 @@ const SearchBar = ({ onGenerateGraph }) => {
     }, 250);
   };
 
-  const handleSelectItem = (item) => {
-    if (!nodesSliceNodeIds.includes(item._id)) {
-      setSelectedItemObjects((prev) => [...prev, item]);
-      dispatch(addToNodesSlice(item._id));
-    }
-    setShowResults(false);
-    setInput("");
-    setSearchTerm("");
-  };
-
-  const handleRemoveItem = (item) => {
-    dispatch(removeFromNodesSlice(item._id));
-  };
 
   const shouldDropdownBeVisible = showResults && input.trim() !== "";
 
@@ -185,20 +121,9 @@ const SearchBar = ({ onGenerateGraph }) => {
         >
           <SearchResultsTable
             searchResults={searchResults}
-            handleSelectItem={handleSelectItem}
           />
         </div>
       </div>
-
-      {isLoading && <p>Loading selected items...</p>}
-
-      {!isLoading && selectedItemObjects.length > 0 && (
-        <SelectedItemsTable
-          selectedItems={selectedItemObjects}
-          generateGraph={onGenerateGraph}
-          removeSelectedItem={handleRemoveItem}
-        />
-      )}
     </div>
   );
 };

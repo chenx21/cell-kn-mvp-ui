@@ -15,7 +15,7 @@ const nodesSlice = createSlice({
      * Adds single node ID to nodesSlice.
      * Prevents duplicate entries.
      */
-    addTonodesSlice: (state, action) => {
+    addNodesToSlice: (state, action) => {
       const nodeId = action.payload;
       if (!state.originNodeIds.includes(nodeId)) {
         state.originNodeIds.push(nodeId);
@@ -24,7 +24,7 @@ const nodesSlice = createSlice({
     /**
      * Removes single node ID from nodesSlice.
      */
-    removeFromnodesSlice: (state, action) => {
+    removeNodeFromSlice: (state, action) => {
       const nodeIdToRemove = action.payload;
       state.originNodeIds = state.originNodeIds.filter(
         (id) => id !== nodeIdToRemove,
@@ -59,9 +59,7 @@ const nodesSlice = createSlice({
   },
 });
 
-// Export action creators for use in components.
-export const { addToNodesSlice, removeFromNodesSlice, clearNodesSlice, setNodesSlice, toggleNodesSliceItem } =
+// Export action creators and reducer
+export const { addNodesToSlice, removeNodeFromSlice, clearNodesSlice, setNodesSlice, toggleNodesSliceItem } =
   nodesSlice.actions;
-
-// Export reducer for inclusion in Redux store.
 export default nodesSlice.reducer;
