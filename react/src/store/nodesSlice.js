@@ -1,51 +1,51 @@
 import { createSlice } from "@reduxjs/toolkit";
 
-// Initial state for cart slice.
+// Initial state for nodesSlice.
 const initialState = {
   originNodeIds: [],
 };
 
 // Redux slice for managing user's selection of origin nodes.
-const cartSlice = createSlice({
-  name: "cart",
+const nodesSlice = createSlice({
+  name: "nodesSlice",
   initialState,
   // Synchronous actions and reducers.
   reducers: {
     /**
-     * Adds single node ID to cart.
+     * Adds single node ID to nodesSlice.
      * Prevents duplicate entries.
      */
-    addToCart: (state, action) => {
+    addTonodesSlice: (state, action) => {
       const nodeId = action.payload;
       if (!state.originNodeIds.includes(nodeId)) {
         state.originNodeIds.push(nodeId);
       }
     },
     /**
-     * Removes single node ID from cart.
+     * Removes single node ID from nodesSlice.
      */
-    removeFromCart: (state, action) => {
+    removeFromnodesSlice: (state, action) => {
       const nodeIdToRemove = action.payload;
       state.originNodeIds = state.originNodeIds.filter(
         (id) => id !== nodeIdToRemove,
       );
     },
     /**
-     * Clears all node IDs from cart.
+     * Clears all node IDs from nodesSlice.
      */
-    clearCart: (state) => {
+    clearNodesSlice: (state) => {
       state.originNodeIds = [];
     },
     /**
-     * Replaces entire cart with new array of node IDs.
+     * Replaces entire nodesSlice with new array of node IDs.
      */
-    setCart: (state, action) => {
+    setNodesSlice: (state, action) => {
       state.originNodeIds = action.payload;
     },
     /**
-     * Adds node ID to cart if not present, or removes it if it is.
+     * Adds node ID to nodesSlice if not present, or removes it if it is.
      */
-    toggleCartItem: (state, action) => {
+    toggleNodesSliceItem: (state, action) => {
       const nodeId = action.payload;
       const index = state.originNodeIds.indexOf(nodeId);
       if (index >= 0) {
@@ -60,8 +60,8 @@ const cartSlice = createSlice({
 });
 
 // Export action creators for use in components.
-export const { addToCart, removeFromCart, clearCart, setCart, toggleCartItem } =
-  cartSlice.actions;
+export const { addToNodesSlice, removeFromNodesSlice, clearNodesSlice, setNodesSlice, toggleNodesSliceItem } =
+  nodesSlice.actions;
 
 // Export reducer for inclusion in Redux store.
-export default cartSlice.reducer;
+export default nodesSlice.reducer;

@@ -9,7 +9,7 @@ import { useSelector, useDispatch } from "react-redux";
 import SelectedItemsTable from "../SelectedItemsTable/SelectedItemsTable";
 import SearchResultsTable from "../SearchResultsTable/SearchResultsTable";
 import { GraphContext } from "../../contexts/GraphContext";
-import { addToCart, removeFromCart } from "../../store/cartSlice";
+import { addToNodesSlice, removeFromNodesSlice } from "../../store/nodesSlice";
 import { getAllSearchableFields } from "../Utils/Utils";
 
 // SVG Icon Component
@@ -35,7 +35,7 @@ const SearchBar = ({ onGenerateGraph }) => {
   const dispatch = useDispatch();
 
   // State
-  const cartNodeIds = useSelector((state) => state.cart.originNodeIds);
+  const nodesSliceNodeIds = useSelector((state) => state.nodesSlice.originNodeIds);
   const [selectedItemObjects, setSelectedItemObjects] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [input, setInput] = useState("");
@@ -67,7 +67,7 @@ const SearchBar = ({ onGenerateGraph }) => {
     }
   }, []);
 
-  // Get details for cart
+  // Get details for nodesSlice
   const fetchNodeDetailsByIds = useCallback(async (ids, db) => {
     if (!ids || ids.length === 0) return [];
     setIsLoading(true);
@@ -101,15 +101,15 @@ const SearchBar = ({ onGenerateGraph }) => {
     fetchSearchResults();
   }, [searchTerm, graphType, getSearchTerms]);
 
-  // Effect to synchronize local item objects with global cart IDs.
+  // Effect to synchronize local item objects with global nodesSlice IDs.
   useEffect(() => {
-    const syncObjectsWithCart = async () => {
+    const syncObjectsWithNodesSlice = async () => {
       const existingObjectIds = new Set(
         selectedItemObjects.map((item) => item._id),
       );
-      const missingIds = cartNodeIds.filter((id) => !existingObjectIds.has(id));
+      const missingIds = nodesSliceNodeIds.filter((id) => !existingObjectIds.has(id));
       const stillSelectedObjects = selectedItemObjects.filter((item) =>
-        cartNodeIds.includes(item._id),
+        nodesSliceNodeIds.includes(item._id),
       );
 
       if (missingIds.length > 0) {
@@ -120,8 +120,8 @@ const SearchBar = ({ onGenerateGraph }) => {
       }
     };
 
-    syncObjectsWithCart();
-  }, [cartNodeIds, fetchNodeDetailsByIds]);
+    syncObjectsWithNodesSlice();
+  }, [nodesSliceNodeIds, fetchNodeDetailsByIds]);
 
   // Effect for handling clicks outside the component.
   useEffect(() => {
@@ -151,9 +151,9 @@ const SearchBar = ({ onGenerateGraph }) => {
   };
 
   const handleSelectItem = (item) => {
-    if (!cartNodeIds.includes(item._id)) {
+    if (!nodesSliceNodeIds.includes(item._id)) {
       setSelectedItemObjects((prev) => [...prev, item]);
-      dispatch(addToCart(item._id));
+      dispatch(addToNodesSlice(item._id));
     }
     setShowResults(false);
     setInput("");
@@ -161,7 +161,7 @@ const SearchBar = ({ onGenerateGraph }) => {
   };
 
   const handleRemoveItem = (item) => {
-    dispatch(removeFromCart(item._id));
+    dispatch(removeFromNodesSlice(item._id));
   };
 
   const shouldDropdownBeVisible = showResults && input.trim() !== "";

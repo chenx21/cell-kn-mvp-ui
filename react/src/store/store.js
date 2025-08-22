@@ -11,18 +11,18 @@ import {
 } from "redux-persist";
 import storage from "redux-persist/lib/storage";
 import graphReducer from "./graphSlice";
-import cartReducer from "./cartSlice";
+import nodesSliceReducer from "./nodesSlice";
 import savedGraphsReducer from "./savedGraphsSlice";
 
 const persistConfig = {
   key: "root",
   storage,
-  whitelist: ["cart", "savedGraphs"],
+  whitelist: ["nodesSlice", "savedGraphs"],
 };
 
 const rootReducer = combineReducers({
   graph: graphReducer,
-  cart: cartReducer,
+  nodesSlice: nodesSliceReducer,
   savedGraphs: savedGraphsReducer,
 });
 

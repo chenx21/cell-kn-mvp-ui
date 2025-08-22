@@ -6,8 +6,8 @@ import ForceGraph from "../../components/ForceGraph/ForceGraph";
 import { PrunedCollectionsContext } from "../../contexts/PrunedCollectionsContext";
 
 const SearchPage = () => {
-  // Read the origin node IDs directly from the Redux cart slice.
-  const cartNodeIds = useSelector((state) => state.cart.originNodeIds);
+  // Read the origin node IDs directly from the Redux nodesSlice.
+  const nodesSliceNodeIds = useSelector((state) => state.nodesSlice.originNodeIds);
   const prunedCollections = useContext(PrunedCollectionsContext);
   const graphDisplayAreaRef = useRef(null);
 
@@ -59,7 +59,7 @@ const SearchPage = () => {
         </p>
       </div>
 
-      {showGraph && cartNodeIds.length > 0 && (
+      {showGraph && nodesSliceNodeIds.length > 0 && (
         <div className="graph-display-area" ref={graphDisplayAreaRef}>
           <ForceGraph
             settings={{

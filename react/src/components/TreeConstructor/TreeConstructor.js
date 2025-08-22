@@ -3,12 +3,12 @@ import * as d3 from "d3";
 import { useDispatch, useSelector } from "react-redux";
 import { getLabel, truncateString } from "../Utils/Utils";
 import { getColorForCollection } from "../../services/ColorServices/ColorServices";
-import { toggleCartItem } from "../../store/cartSlice";
+import { toggleNodesSliceItem } from "../../store/nodesSlice";
 
 const TreeConstructor = ({ data }) => {
   const svgRef = useRef(null);
   const dispatch = useDispatch();
-  const cartNodeIds = useSelector((state) => state.cart.originNodeIds);
+  const nodesSliceNodeIds = useSelector((state) => state.nodesSlice.originNodeIds);
 
   // Main effect for building and structuring the tree
   useEffect(() => {
@@ -129,7 +129,7 @@ const TreeConstructor = ({ data }) => {
 
       const fo = nodeEnter
         .append("foreignObject")
-        .attr("class", "cart-button-fo")
+        .attr("class", "nodesSlice-button-fo")
         .attr("width", 90)
         .attr("height", 20)
         .attr("y", -10)
@@ -147,11 +147,11 @@ const TreeConstructor = ({ data }) => {
         .style("font-size", "10px")
         .style("cursor", "pointer")
         .text((d) =>
-          cartNodeIds.includes(d.data._id) ? "Remove" : "Add to Cart",
+          nodesSliceNodeIds.includes(d.data._id) ? "Remove" : "Add to Graph",
         )
         .on("click", (event, d) => {
           event.stopPropagation();
-          dispatch(toggleCartItem(d.data._id));
+          dispatch(toggleNodesSliceItem(d.data._id));
         });
 
       const nodeUpdate = node.merge(nodeEnter);
@@ -214,11 +214,11 @@ const TreeConstructor = ({ data }) => {
 
     d3.select(svgRef.current)
       .selectAll("g.node-group")
-      .select(".cart-button-fo button")
+      .select(".nodesSlice-button-fo button")
       .text((d) =>
-        cartNodeIds.includes(d.data._id) ? "Remove" : "Add to Cart",
+        nodesSliceNodeIds.includes(d.data._id) ? "Remove" : "Add to Graph",
       );
-  }, [cartNodeIds]);
+  }, [nodesSliceNodeIds]);
 
   return <div ref={svgRef} className="tree-constructor-container"></div>;
 };

@@ -2283,12 +2283,12 @@ kbd {
   color: #000;
 }
 
-.node-group .cart-button-fo {
+.node-group .nodesSlice-button-fo {
   opacity: 0;
   transition: opacity 0.2s ease-in-out;
 }
 
-.node-group:hover .cart-button-fo {
+.node-group:hover .nodesSlice-button-fo {
   opacity: 1;
 }
 

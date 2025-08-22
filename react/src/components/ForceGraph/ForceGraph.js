@@ -55,8 +55,8 @@ const ForceGraph = ({
   const svgRef = useRef();
   const graphInstanceRef = useRef(null);
 
-  // Selects origin node IDs from cart slice for cart-driven graphs.
-  const cartOriginNodeIds = useSelector((state) => state.cart.originNodeIds);
+  // Selects origin node IDs from nodesSlice for NodesSlice driven graphs.
+  const nodesSliceOriginNodeIds = useSelector((state) => state.nodesSlice.originNodeIds);
 
   // Selects state from Redux store, including graph data and history.
   const { present, past, future } = useSelector((state) => state.graph);
@@ -90,19 +90,19 @@ const ForceGraph = ({
   });
   const [isLoadModalOpen, setIsLoadModalOpen] = useState(false);
 
-  // Initializes or resets graph based on props or cart.
+  // Initializes or resets graph based on props or nodesSlice.
   useEffect(() => {
-    // Determine which node IDs to use: props take precedence over cart.
+    // Determine which node IDs to use: props take precedence over nodesSlice.
     const effectiveNodeIds =
       originNodeIdsFromProps.length > 0
         ? originNodeIdsFromProps
-        : cartOriginNodeIds;
+        : nodesSliceOriginNodeIds;
 
     // Trigger graph re-initialization if effective IDs differ from current graph's IDs.
     if (JSON.stringify(effectiveNodeIds) !== JSON.stringify(originNodeIds)) {
       dispatch(initializeGraph({ nodeIds: effectiveNodeIds }));
     }
-  }, [originNodeIdsFromProps, cartOriginNodeIds, originNodeIds, dispatch]);
+  }, [originNodeIdsFromProps, nodesSliceOriginNodeIds, originNodeIds, dispatch]);
 
   // Fetches list of available data collections on component mount.
   useEffect(() => {
