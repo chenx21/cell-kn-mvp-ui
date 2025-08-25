@@ -2404,8 +2404,8 @@ kbd {
   color: var(--color-text-on-dark);
 }
 
-/* Node Popup */
-.node-popup {
+/* Document Popup */
+.document-popup {
   position: absolute;
   z-index: 1000;
   background-color: var(--color-white);
@@ -2419,7 +2419,8 @@ kbd {
   min-width: 200px;
 }
 
-.node-popup-button {
+.document-popup-button,
+.document-popup .add-to-graph-button{
   margin: 0;
   display: block;
   width: 100%;
@@ -2432,21 +2433,23 @@ kbd {
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  line-height: inherit;
   transition:
     background-color 0.2s ease,
     color 0.2s ease;
 }
 
-.node-popup-button:hover {
+.document-popup-button:hover,
+.document-popup .add-to-graph-button:hover{
   background-color: var(--color-light-bg);
   color: var(--color-main);
 }
 
-a.node-popup-button {
+a.document-popup-button {
   text-decoration: none;
 }
 
-.node-popup-close-button {
+.document-popup-close-button {
   position: absolute;
   top: 4px;
   right: 4px;
@@ -2459,12 +2462,12 @@ a.node-popup-button {
   line-height: 1;
 }
 
-.node-popup-close-button:hover {
+.document-popup-close-button:hover {
   color: var(--color-dark);
 }
 
 /* AddToGraphButton style overrides */
-.node-popup .add-to-graph-button {
+.document-popup .add-to-graph-button {
   width: 100%;
   height: auto;
   border-radius: 4px;
@@ -2476,34 +2479,34 @@ a.node-popup-button {
   font-size: 0.95rem;
 }
 
-.node-popup .add-to-graph-button .icon-container {
+.document-popup .add-to-graph-button .icon-container {
   margin-right: 8px;
 }
 
-.node-popup .add-to-graph-button .text-container {
+.document-popup .add-to-graph-button .text-container {
   color: var(--color-text);
   transition: color 0.2s ease;
 }
-.node-popup .add-to-graph-button .icon-container::before {
+.document-popup .add-to-graph-button .icon-container::before {
   color: var(--color-text);
 }
-.node-popup .add-to-graph-button:hover {
+.document-popup .add-to-graph-button:hover {
   background-color: var(--color-light-bg);
 }
-.node-popup .add-to-graph-button:hover .icon-container::before,
-.node-popup .add-to-graph-button:hover .text-container {
+.document-popup .add-to-graph-button:hover .icon-container::before,
+.document-popup .add-to-graph-button:hover .text-container {
   color: var(--color-main);
 }
-.node-popup .add-to-graph-button.added .icon-container::before,
-.node-popup .add-to-graph-button.added .text-container {
+.document-popup .add-to-graph-button.added .icon-container::before,
+.document-popup .add-to-graph-button.added .text-container {
   color: var(--color-green-light);
   font-weight: bold;
 }
-.node-popup .add-to-graph-button.added {
+.document-popup .add-to-graph-button.added {
   background-color: transparent;
 }
-.node-popup .add-to-graph-button.added:hover .icon-container::before,
-.node-popup .add-to-graph-button.added:hover .text-container {
+.document-popup .add-to-graph-button.added:hover .icon-container::before,
+.document-popup .add-to-graph-button.added:hover .text-container {
   color: var(--color-secondary-red);
 }
 .tree-constructor-container .add-to-graph-button {

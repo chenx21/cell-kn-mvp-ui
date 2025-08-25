@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import SunburstConstructor from "../SunburstConstructor/SunburstConstructor";
 import { LoadingBar, getLabel, mergeChildren } from "../Utils/Utils";
+import DocumentPopup from "../DocumentPopup/DocumentPopup";
+import AddToGraphButton from "../AddToGraphButton/AddToGraphButton";
 
 const Sunburst = ({ addSelectedItem }) => {
   // --- State ---
@@ -339,57 +341,34 @@ const Sunburst = ({ addSelectedItem }) => {
 
       {/* Popup */}
       {popupVisible && clickedItem && (
-        <div
-          ref={popupRef}
-          className="node-popup"
-          data-testid="node-popup"
-          style={{
-            position: "absolute",
-            left: `${popupPosition.x}px`,
-            top: `${popupPosition.y}px`,
-          }}
+        <DocumentPopup
+          isVisible={popupVisible}
+          position={popupPosition}
+          onClose={handlePopupClose}
         >
-          <p
-            style={{
-              margin: "0 0 5px 0",
-              fontWeight: "bold",
-              borderBottom: "1px solid #ccc",
-              paddingBottom: "3px",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              maxWidth: "200px",
-            }}
-          >
-            {getLabel(clickedItem)}{" "}
-          </p>
-          <a
-            className="popup-button"
-            data-testid="popup-button-goto"
-            href={`/#/collections/${clickedItem._id}`}
-            rel="noopener noreferrer"
-            onClick={handlePopupClose}
-          >
-            Go To Page
-          </a>
-          {typeof addSelectedItem === "function" && (
-            <button
-              className="popup-button"
-              data-testid="popup-button-add-origin"
-              onClick={handleSelectItem}
-            >
-              Add as origin
-            </button>
+          {clickedItem && (
+            <>
+              <p
+                style={{
+                  margin: "0 0 5px 0",
+                  fontWeight: "bold",
+                  borderBottom: "1px solid #ccc",
+                  paddingBottom: "3px",
+                }}
+              >
+                {getLabel(clickedItem)}
+              </p>
+              <a
+                className="document-popup-button"
+                href={`/#/collections/${clickedItem._id}`}
+                rel="noopener noreferrer"
+              >
+                Go To Page
+              </a>
+              <AddToGraphButton nodeId={clickedItem._id} text="Add to Graph" />
+            </>
           )}
-          <button
-            className="popup-button x-button"
-            data-testid="popup-button-close"
-            onClick={handlePopupClose}
-            aria-label="Close popup"
-          >
-            x
-          </button>
-        </div>
+        </DocumentPopup>
       )}
     </div>
   );

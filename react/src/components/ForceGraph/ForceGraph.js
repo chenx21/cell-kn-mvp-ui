@@ -40,6 +40,7 @@ import FilterableDropdown from "../FilterableDropdown/FilterableDropdown";
 import { saveGraph } from "../../store/savedGraphsSlice";
 import LoadGraphModal from "../LoadGraphModal/LoadGraphModal";
 import AddToGraphButton from "../AddToGraphButton/AddToGraphButton";
+import DocumentPopup from "../DocumentPopup/DocumentPopup";
 
 // Main React component for D3 force-directed graph, wrapped in memo for performance.
 // Orchestrates Redux state, user interactions, and D3 instance.
@@ -641,55 +642,42 @@ const ForceGraph = ({
         </div>
 
         {/* Right-click context menu for node actions. */}
-        <div
-          className="node-popup"
-          style={
-            popup.visible
-              ? {
-                  display: "flex",
-                  left: `${popup.position.x}px`,
-                  top: `${popup.position.y}px`,
-                }
-              : { display: "none" }
-          }
+        <DocumentPopup
+          isVisible={popup.visible}
+          position={popup.position}
+          onClose={handlePopupClose}
         >
           <a
             href={`/#/collections/${popup.nodeId}`}
+            target="_blank"
             rel="noopener noreferrer"
-            className="node-popup-button"
+            className="document-popup-button"
           >
             Go To "{popup.nodeLabel}"
           </a>
           <button
+            className="document-popup-button"
             onClick={handleExpand}
             style={{ display: !popup.isEdge ? "block" : "none" }}
-            className="node-popup-button"
           >
             Expand
           </button>
           <button
+            className="document-popup-button"
             onClick={handleCollapse}
             style={{ display: !popup.isEdge ? "block" : "none" }}
-            className="node-popup-button"
           >
             Collapse Leaves
           </button>
           <button
+            className="document-popup-button"
             onClick={handleRemove}
             style={{ display: !popup.isEdge ? "block" : "none" }}
-            className="node-popup-button"
           >
             Remove Node
           </button>
-          <AddToGraphButton nodeId={`${popup.nodeId}`} text="Add to Graph" />
-          <button
-            className="node-popup-close-button"
-            onClick={handlePopupClose}
-            aria-label="Close popup"
-          >
-            ×
-          </button>
-        </div>
+          <AddToGraphButton nodeId={popup.nodeId} text="Add to Graph" />
+        </DocumentPopup>
       </div>
 
       {/* Main side panel for all user-configurable graph options. */}
