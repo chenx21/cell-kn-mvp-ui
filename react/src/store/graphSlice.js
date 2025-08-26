@@ -214,11 +214,6 @@ const graphSlice = createSlice({
       state.graphData = { nodes: [], links: [] };
       state.collapsed = { initial: [], userDefined: [], userIgnored: [] };
     },
-    // Save graph settings without resetting graph
-    saveLastGraphSettings: (state, action) => {
-      state.lastAppliedOriginNodeIds = action.payload.nodeIds;
-      // state.lastAppliedSettings = state.settings;
-    },
     // Populates allowed collections after initial fetch.
     setAvailableCollections: (state, action) => {
       state.settings.allowedCollections = action.payload;

@@ -220,8 +220,6 @@ const ForceGraph = ({
             const handleSimulationEnd = (finalNodes, finalLinks) => {
               dispatch(setGraphData({ nodes: finalNodes, links: finalLinks }));
             };
-            // Send update to graphSlice
-            // dispatch(saveLastGraphSettings({ nodeIds: originNodeIds }))
             // Init empty.
             const newGraphInstance = ForceGraphConstructor(
               svgRef.current,
