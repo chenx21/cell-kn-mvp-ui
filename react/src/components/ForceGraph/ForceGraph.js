@@ -495,14 +495,39 @@ const ForceGraph = ({
   };
 
   // --- Local UI Handlers ---
-  const handleNodeClick = (e, nodeData) => {
+    const handleNodeClick = (e, nodeData) => {
+    // Get the bounding box of the graph container.
     const chartRect = wrapperRef.current.getBoundingClientRect();
+
+    // Set leeway
+    const popupWidth = 200;
+    const popupHeight = 300;
+
+    // Initial click position relative to the chart container.
+    let x = e.clientX - chartRect.left;
+    let y = e.clientY - chartRect.top;
+
+    // Check for horizontal overflow (right edge).
+    if (x + popupWidth > chartRect.width) {
+      x = x - popupWidth;
+    }
+
+    // Check for vertical overflow (bottom edge).
+    if (y + popupHeight > chartRect.height) {
+      y = y - popupHeight;
+    }
+
+    // Ensure the popup does not go off the top or left of the screen.
+    x = Math.max(0, x);
+    y = Math.max(0, y);
+
+    // Set the final adjusted position and show the popup.
     setPopup({
       visible: true,
       nodeId: nodeData._id,
       nodeLabel: getLabel(nodeData),
       isEdge: nodeData._id.split("/")[0].includes("-"),
-      position: { x: e.clientX - chartRect.left, y: e.clientY - chartRect.top },
+      position: { x, y },
     });
   };
 
