@@ -215,7 +215,8 @@ const ForceGraph = ({
               {
                 onSimulationEnd: handleSimulationEnd,
                 saveInitial: false,
-                originNodeIds: settings.useFocusNodes ? originNodeIds : [],
+                useFocusNodes: settings.useFocusNodes,
+                originNodeIds: originNodeIds,
                 nodeFontSize: settings.nodeFontSize,
                 linkFontSize: settings.edgeFontSize,
                 initialLabelStates: settings.labelStates,
@@ -264,6 +265,7 @@ const ForceGraph = ({
             }
 
             graphInstance.updateGraph({
+              newOriginNodeIds: originNodeIds,
               newNodes: processedData.nodes,
               newLinks: processedData.links,
               resetData: lastActionType === "fetch/fulfilled",
