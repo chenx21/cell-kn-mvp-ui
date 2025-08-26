@@ -154,7 +154,10 @@ const initialState = {
     useFocusNodes: true,
     collapseOnStart: true,
     graphType: "phenotypes",
-    edgeFilters: {},
+    edgeFilters: getFilterableEdgeFields().reduce((acc, field) => {
+      acc[field] = [];
+      return acc;
+    }, {}),
     lastAppliedOriginNodeIds: [],
   },
   // Stores a snapshot of the settings last used to generate the graph.
@@ -206,10 +209,15 @@ const graphSlice = createSlice({
       state.status = "idle";
       state.lastActionType = "initializeGraph";
       state.lastAppliedOriginNodeIds = action.payload.nodeIds;
-      state.lastAppliedSettings = state.settings;
+      // state.lastAppliedSettings = state.settings;
       state.rawData = {};
       state.graphData = { nodes: [], links: [] };
       state.collapsed = { initial: [], userDefined: [], userIgnored: [] };
+    },
+    // Save graph settings without resetting graph
+    saveLastGraphSettings: (state, action) => {
+      state.lastAppliedOriginNodeIds = action.payload.nodeIds;
+      // state.lastAppliedSettings = state.settings;
     },
     // Populates allowed collections after initial fetch.
     setAvailableCollections: (state, action) => {
@@ -304,6 +312,7 @@ const graphSlice = createSlice({
       })
       .addCase(fetchAndProcessGraph.fulfilled, (state, action) => {
         state.status = "processing";
+        state.lastAppliedSettings = state.settings;
         state.rawData = action.payload;
         state.lastActionType = "fetch/fulfilled";
       })
@@ -381,6 +390,7 @@ export const {
   updateSetting,
   setGraphData,
   initializeGraph,
+    saveLastGraphSettings,
   setAvailableCollections,
   clearNodeToCenter,
   updateNodePosition,

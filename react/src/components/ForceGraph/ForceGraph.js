@@ -6,7 +6,7 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
-import { useSelector, useDispatch } from "react-redux";
+import {useSelector, useDispatch, shallowEqual} from "react-redux";
 import { ActionCreators } from "redux-undo";
 import ForceGraphConstructor from "../ForceGraphConstructor/ForceGraphConstructor";
 import collMaps from "../../assets/cell-kn-mvp-collection-maps.json";
@@ -23,6 +23,7 @@ import {
   updateSetting,
   setGraphData,
   initializeGraph,
+    saveLastGraphSettings,
   setAvailableCollections,
   expandNode,
   setInitialCollapseList,
@@ -62,19 +63,8 @@ const ForceGraph = ({
     (state) => state.nodesSlice.originNodeIds,
   );
 
-  // This selector calculates if settings are stale.
-  const isSettingsStale = useSelector((state) => {
-    const { settings, lastAppliedSettings } = state.graph.present;
-    if (!lastAppliedSettings) {
-      return false;
-    }
-    return JSON.stringify(settings) !== JSON.stringify(lastAppliedSettings);
-  });
-
   // Selects state from Redux store, including graph data and history.
-  const { present, past, future } = useSelector((state) => state.graph);
   const {
-    settings,
     graphData,
     rawData,
     status,
@@ -84,9 +74,31 @@ const ForceGraph = ({
     collapsed,
     availableEdgeFilters,
     edgeFilterStatus,
-  } = present;
-  const canUndo = past.length > 0;
-  const canRedo = future.length > 0;
+  } = useSelector((state) => state.graph.present, shallowEqual);
+
+  // Select undo and redo state
+  const { canUndo, canRedo } = useSelector((state) => ({
+    canUndo: state.graph.past.length > 0,
+    canRedo: state.graph.future.length > 0,
+  }), shallowEqual);
+
+  // Select settings state
+  const { settings, lastAppliedSettings } = useSelector(
+    (state) => ({
+      settings: state.graph.present.settings,
+      lastAppliedSettings: state.graph.present.lastAppliedSettings,
+    }),
+    shallowEqual
+  );
+
+  // Calculate if settings are stale.
+  const isSettingsStale = useMemo(() => {
+    if (!lastAppliedSettings) {
+      return false;
+    }
+    return JSON.stringify(settings) !== JSON.stringify(lastAppliedSettings);
+  }, [settings, lastAppliedSettings]);
+
 
   // Local component state for UI and temporary flags.
   const [collections, setCollections] = useState([]);
@@ -208,10 +220,12 @@ const ForceGraph = ({
             const handleSimulationEnd = (finalNodes, finalLinks) => {
               dispatch(setGraphData({ nodes: finalNodes, links: finalLinks }));
             };
+            // Send update to graphSlice
+            // dispatch(saveLastGraphSettings({ nodeIds: originNodeIds }))
             // Init empty.
             const newGraphInstance = ForceGraphConstructor(
               svgRef.current,
-              { nodes: [], links: [] },
+              { nodes: processedData.nodes, links: processedData.links },
               {
                 onSimulationEnd: handleSimulationEnd,
                 saveInitial: false,
@@ -246,8 +260,6 @@ const ForceGraph = ({
                 settings.labelStates[labelClass],
                 labelClass,
               );
-              // Send signal that graph is ready.
-              dispatch(initializeGraph({ nodeIds: originNodeIds }));
             }
           } else {
             // Updates existing graph instance with new data.
