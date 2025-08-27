@@ -53,16 +53,14 @@ def get_graph(request):
     depth = request.data.get("depth")
     edge_direction = request.data.get("edge_direction")
     allowed_collections = request.data.get("allowed_collections")
-    node_limit = request.data.get("node_limit", 100)
     graph = request.data.get("graph")
-    edge_filters = request.data.get("edge_filters", {})
+    edge_filters = request.data.get("edge_filters", None)
 
     search_results = utils.get_graph(
         node_ids,
         depth,
         edge_direction,
         allowed_collections,
-        node_limit,
         graph,
         edge_filters,
     )
@@ -140,10 +138,10 @@ def get_edge_filter_options(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
+
 @api_view(["POST"])
 def get_documents(request):
     graph = request.data.get("db")
     document_ids = request.data.get("document_ids")
     results = utils.get_documents(document_ids, graph)
     return JsonResponse(results, safe=False)
-

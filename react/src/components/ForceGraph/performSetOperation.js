@@ -1,104 +1,84 @@
 /**
- * Performs set operation on graph data from multiple origins.
- * @param {object} data - Raw graph data from API.
- * @param {string} operation - Name of operation: 'Intersection', 'Union', etc.
- * @param {Array<string>} originNodeIds - List of origin node IDs.
- * @returns {{nodes: Array, links: Array}} Processed graph data.
+ * Performs a set operation (union, intersection, etc.) on multiple graph datasets.
+ *
+ * @param {object} data - The full dataset from the API, keyed by origin node IDs.
+ * @param {string} operation - The set operation to perform: 'UNION', 'INTERSECTION', or 'SYMMETRIC_DIFFERENCE'.
+ * @param {string[]} originNodeIds - An array of the start_node_ids to include in the operation.
+ * @returns {{nodes: object[], links: object[]}} - A single, flat graph object.
  */
 export function performSetOperation(data, operation, originNodeIds) {
-  // Return early if data is invalid or lacks nodes.
-  if (!data || !data.nodes) {
-    console.warn("performSetOperation called with invalid data:", data);
+  // Handle base cases
+  if (!originNodeIds || originNodeIds.length === 0) {
     return { nodes: [], links: [] };
   }
 
-  // Extract raw nodes and links from data.
-  const nodesByOrigin = data.nodes;
-  const allLinks = data.links || [];
+  if (originNodeIds.length === 1) {
+    const singleNodeId = originNodeIds[0];
+    // Return the data for the single node, or empty arrays if it doesn't exist.
+    return data[singleNodeId] || { nodes: [], links: [] };
+  }
 
-  // Helper calculates final set of node IDs based on operation.
-  const getAllNodeIdsFromOrigins = (operation) => {
-    // Map each origin's subgraph to a set of node IDs.
-    const nodeIdsPerOrigin = Object.values(nodesByOrigin).map((originGroup) => {
-      if (!Array.isArray(originGroup)) return new Set();
-      return new Set(
-        originGroup
-          .filter((item) => item?.node?._id)
-          .map((item) => item.node._id),
-      );
-    });
-
-    if (nodeIdsPerOrigin.length === 0) return new Set();
-
-    if (operation === "Intersection") {
-      if (nodeIdsPerOrigin.length < 2)
-        return new Set(nodeIdsPerOrigin[0] || []);
-
-      // Find intersection between all node sets.
-      let intersectionResult = new Set(nodeIdsPerOrigin[0]);
-      for (let i = 1; i < nodeIdsPerOrigin.length; i++) {
-        intersectionResult = new Set(
-          [...intersectionResult].filter((id) => nodeIdsPerOrigin[i].has(id)),
-        );
+  // Aggregate all nodes and count their frequencies across graphs.
+  const nodeFrequencyMap = new Map();
+  for (const nodeId of originNodeIds) {
+    // Safely access nodes, defaulting to an empty array.
+    const currentNodes = data[nodeId]?.nodes || [];
+    for (const node of currentNodes) {
+      if (nodeFrequencyMap.has(node._id)) {
+        // Increment count for existing node.
+        nodeFrequencyMap.get(node._id).count++;
+      } else {
+        // Add new node to the map.
+        nodeFrequencyMap.set(node._id, { node: node, count: 1 });
       }
-
-      // Ensure origin nodes are always included in intersection result.
-      originNodeIds.forEach((id) => intersectionResult.add(id));
-      return intersectionResult;
     }
+  }
 
-    if (operation === "Union") {
-      // Combine all node sets into single unique set.
-      return new Set(nodeIdsPerOrigin.flatMap((s) => [...s]));
+  // Filter the aggregated nodes based on the requested operation.
+  let finalNodes = [];
+  const allEntries = Array.from(nodeFrequencyMap.values());
+
+  switch (operation) {
+    case 'Intersection':
+      finalNodes = allEntries
+        .filter(entry => entry.count === originNodeIds.length)
+        .map(entry => entry.node);
+      break;
+
+    case 'Symmetric Difference':
+      finalNodes = allEntries
+        .filter(entry => entry.count === 1)
+        .map(entry => entry.node);
+      break;
+
+    case 'Union':
+    default:
+      // Union is the default behavior.
+      finalNodes = allEntries.map(entry => entry.node);
+      break;
+  }
+
+  // Create a Set of final node IDs for efficient link filtering.
+  const finalNodeIdSet = new Set(finalNodes.map(node => node._id));
+
+  // Aggregate all unique links and filter them.
+  const uniqueLinks = new Map();
+  for (const nodeId of originNodeIds) {
+    const currentLinks = data[nodeId]?.links || [];
+    for (const link of currentLinks) {
+      // Use a Map to automatically handle duplicate links across graphs.
+      uniqueLinks.set(link._id, link);
     }
+  }
 
-    if (operation === "Symmetric Difference") {
-      if (nodeIdsPerOrigin.length < 2)
-        return new Set(nodeIdsPerOrigin[0] || []);
-
-      // Calculate symmetric difference between node sets.
-      let result = new Set(nodeIdsPerOrigin[0]);
-      for (let i = 1; i < nodeIdsPerOrigin.length; i++) {
-        const currentSet = nodeIdsPerOrigin[i];
-        const nextResult = new Set();
-        result.forEach((id) => {
-          if (!currentSet.has(id)) nextResult.add(id);
-        });
-        currentSet.forEach((id) => {
-          if (!result.has(id)) nextResult.add(id);
-        });
-        result = nextResult;
-      }
-      return result;
-    }
-
-    console.error("Unknown set operation:", operation);
-    return new Set();
-  };
-
-  // Get set of node IDs for final graph.
-  const finalNodeIdSet = getAllNodeIdsFromOrigins(operation);
-
-  // Filter master link list.
-  const filteredLinks = allLinks.filter(
-    (link) => finalNodeIdSet.has(link._from) && finalNodeIdSet.has(link._to),
+  // A link is kept only if both its source and target nodes are in the final set.
+  const filteredLinks = Array.from(uniqueLinks.values()).filter(link =>
+    finalNodeIdSet.has(link._from) && finalNodeIdSet.has(link._to)
   );
 
-  // Gather unique node objects corresponding to final IDs.
-  const finalNodeMap = new Map();
-  Object.values(nodesByOrigin)
-    .flat()
-    .forEach((item) => {
-      if (item?.node?._id && finalNodeIdSet.has(item.node._id)) {
-        if (!finalNodeMap.has(item.node._id)) {
-          finalNodeMap.set(item.node._id, item.node);
-        }
-      }
-    });
-
-  // Return graph structure.
+  // Return the final, flat graph object.
   return {
-    nodes: Array.from(finalNodeMap.values()),
+    nodes: finalNodes,
     links: filteredLinks,
   };
 }
