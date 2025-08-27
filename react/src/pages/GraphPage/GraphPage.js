@@ -57,10 +57,10 @@ const GraphPage = () => {
     }
   }, []);
 
-    useEffect(() => {
-      dispatch(initializeGraph({}));
+  // Init graph on component load.
+  useEffect(() => {
+    dispatch(initializeGraph({}));
   }, [dispatch]);
-
 
   // Effect to synchronize local objects with global node IDs.
   useEffect(() => {
@@ -218,9 +218,12 @@ const GraphPage = () => {
         )}
       </div>
 
-        <div className={!showGraph ? 'hidden' : 'graph-display-area'} ref={graphDisplayAreaRef}>
-          <ForceGraph />
-        </div>
+      <div
+        className={!showGraph ? "hidden" : "graph-display-area"}
+        ref={graphDisplayAreaRef}
+      >
+        <ForceGraph />
+      </div>
       <LoadGraphModal
         isOpen={isLoadModalOpen}
         onClose={() => setIsLoadModalOpen(false)}
