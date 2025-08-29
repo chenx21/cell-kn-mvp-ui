@@ -154,8 +154,14 @@ const initialState = {
     useFocusNodes: true,
     collapseOnStart: true,
     graphType: "phenotypes",
-    edgeFilters: {},
+    edgeFilters: getFilterableEdgeFields().reduce((acc, field) => {
+      acc[field] = [];
+      return acc;
+    }, {}),
+    lastAppliedOriginNodeIds: [],
   },
+  // Stores a snapshot of the settings last used to generate the graph.
+  lastAppliedSettings: null,
   // Core graph data and state.
   originNodeIds: [], // Initial nodes for graph query.
   rawData: {}, // Unprocessed data directly from API.
@@ -202,6 +208,8 @@ const graphSlice = createSlice({
       state.originNodeIds = action.payload.nodeIds;
       state.status = "idle";
       state.lastActionType = "initializeGraph";
+      state.lastAppliedOriginNodeIds = action.payload.nodeIds;
+      // state.lastAppliedSettings = state.settings;
       state.rawData = {};
       state.graphData = { nodes: [], links: [] };
       state.collapsed = { initial: [], userDefined: [], userIgnored: [] };
@@ -278,6 +286,35 @@ const graphSlice = createSlice({
       state.nodeToCenter = null;
       state.lastActionType = "clearNodeToCenter";
     },
+    // Loads graph into state
+    loadGraph: (state, action) => {
+      const { originNodeIds, settings, graphData } = action.payload;
+      state.originNodeIds = originNodeIds;
+      state.settings = settings;
+      state.graphData = graphData;
+      state.status = "succeeded";
+      state.lastActionType = "loadGraph";
+      state.rawData = {};
+    },
+    loadGraphFromJson: (state, action) => {
+      const graphDataFromFile = action.payload; // Expects { nodes: [], links: [] }
+
+      // Use the nodes from the file as the new graphData.
+      state.graphData = graphDataFromFile;
+
+      // Since the file doesn't specify origin nodes, assume no origin nodes
+      state.originNodeIds = [];
+      state.lastAppliedOriginNodeIds = [];
+
+      // Reset settings to a default state.
+      state.settings = initialState.settings;
+      state.lastAppliedSettings = initialState.settings;
+
+      // Set the state to signal a successful load.
+      state.status = "succeeded";
+      state.lastActionType = "loadGraph";
+      state.rawData = {};
+    },
   },
   // Reducers for handling async thunk lifecycle actions.
   extraReducers: (builder) => {
@@ -289,6 +326,7 @@ const graphSlice = createSlice({
       })
       .addCase(fetchAndProcessGraph.fulfilled, (state, action) => {
         state.status = "processing";
+        state.lastAppliedSettings = state.settings;
         state.rawData = action.payload;
         state.lastActionType = "fetch/fulfilled";
       })
@@ -373,6 +411,8 @@ export const {
   uncollapseNode,
   collapseNode,
   updateEdgeFilter,
+  loadGraph,
+  loadGraphFromJson,
 } = graphSlice.actions;
 
 // Wrap base reducer with redux-undo.

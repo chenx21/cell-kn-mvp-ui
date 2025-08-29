@@ -10,8 +10,11 @@ import {
 } from "../../components/Utils/Utils";
 import FTUIllustration from "../../components/FTUIllustration/FTUIllustration";
 import { useFtuParts } from "../../contexts/FTUPartsContext";
+import { initializeGraph } from "../../store/graphSlice";
+import { useDispatch } from "react-redux";
 
 const DocumentPage = () => {
+  const dispatch = useDispatch();
   const { coll, id } = useParams();
   const [document, setDocument] = useState(null);
   const [nodeIds, setNodeIds] = useState(null);
@@ -33,6 +36,7 @@ const DocumentPage = () => {
         const data = await response.json();
         setDocument(data);
         setNodeIds(parseId(data));
+        dispatch(initializeGraph({ nodeIds: parseId(data) }));
       } catch (error) {
         console.error("Failed to fetch document:", error);
 
@@ -107,7 +111,11 @@ const DocumentPage = () => {
             )}
           </div>
           <div className="force-graph-panel">
-            <ForceGraph nodeIds={nodeIds} settings={forceGraphSettings} />
+            <ForceGraph
+              nodeIds={nodeIds}
+              settings={forceGraphSettings}
+              init_immediately={true}
+            />
           </div>
         </div>
       </div>

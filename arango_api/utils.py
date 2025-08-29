@@ -10,7 +10,7 @@ from arango_api.db import (
 )
 
 
-def get_collections(graph, collection_type):
+def get_collections(collection_type, graph="ontologies"):
     # Filter for document collections
     if graph == "phenotypes":
         all_collections = db_phenotypes.collections()
@@ -247,7 +247,7 @@ def get_shortest_paths(node_ids, edge_direction):
 
 
 def get_all():
-    collections = get_collections("ontologies", "document")
+    collections = get_collections("document")
 
     # Create the base query
     union_queries = []
@@ -742,29 +742,20 @@ def format_node_data(node_doc, has_children):
     }
 
 
-def query_edge_filter_options(graph, fields_to_query):
+def query_edge_filter_options(fields_to_query):
     """
     Queries database for unique values for specified edge attributes.
     Returns dictionary of results or raises an exception on error.
     """
-    # Parameter Validation
-    if not graph or not isinstance(fields_to_query, list):
-        raise ValueError("Missing or invalid 'graph' or 'fields' parameter.")
-
     if not fields_to_query:
         return {}
 
-    # Database Selection
-    if graph == "phenotypes":
-        db = db_phenotypes
-    elif graph == "ontologies":
-        db = db_ontologies
-    else:
-        raise ValueError(f"Unknown graph type: {graph}")
+    # Query only larger db to get all filter options
+    db = db_ontologies
 
     try:
         # Get list of all edge collection names for the specified graph.
-        edge_collections = get_collections(graph, "edge")
+        edge_collections = get_collections("edge")
 
         if not edge_collections:
             return {}
@@ -814,3 +805,66 @@ def query_edge_filter_options(graph, fields_to_query):
         print(f"Error executing edge_filter_options query: {e}")
         # Re-raise exception to be handled by the view layer.
         raise
+
+def get_documents(document_ids, graph_name):
+    """
+    Fetches full document details for a list of document IDs, which may
+    belong to different collections.
+    """
+    # Input Validation
+    if not isinstance(document_ids, list) or not document_ids:
+        return []
+
+    # Group document keys by their collection name
+    collections_to_keys = {}
+    for doc_id in document_ids:
+        try:
+            # The _id format is "collection/key"
+            collection_name, key = doc_id.split('/')
+            # Use setdefault to initialize a list if the key is new, then append.
+            collections_to_keys.setdefault(collection_name, []).append(key)
+        except ValueError:
+            # Handle potentially malformed IDs
+            print(f"Warning: Skipping malformed document ID: {doc_id}")
+            continue
+
+    # If no valid IDs were found after parsing
+    if not collections_to_keys:
+        return []
+
+    # Select the correct database connection
+    try:
+        db_name_lower = graph_name.lower()
+        db_connection = db_phenotypes if db_name_lower == "phenotypes" else db_ontologies
+    except Exception as e:
+        print(f"Error selecting database connection: {e}")
+        return []
+
+    # Execute one query per collection and aggregate results
+    all_results = []
+
+    # Fetch all from single collection
+    query = """
+        FOR doc IN @@collection
+            FILTER doc._key IN @keys
+            RETURN doc
+    """
+
+    for collection, keys in collections_to_keys.items():
+        bind_vars = {
+            "@collection": collection,
+            "keys": keys
+        }
+        try:
+            cursor = db_connection.aql.execute(query, bind_vars=bind_vars)
+            # Get all results
+            results_for_collection = [doc for doc in cursor]
+            all_results.extend(results_for_collection)
+
+        except Exception as e:
+            print(f"Error executing query for collection '{collection}': {e}")
+            continue
+
+    print(all_results)
+    return all_results
+

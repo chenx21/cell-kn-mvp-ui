@@ -6,7 +6,7 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
-import { useSelector, useDispatch } from "react-redux";
+import { useSelector, useDispatch, shallowEqual } from "react-redux";
 import { ActionCreators } from "redux-undo";
 import ForceGraphConstructor from "../ForceGraphConstructor/ForceGraphConstructor";
 import collMaps from "../../assets/cell-kn-mvp-collection-maps.json";
@@ -37,12 +37,18 @@ import { performSetOperation } from "./performSetOperation";
 import { useHotkeys } from "../../hooks/useHotkeys";
 import { useHotkeyHold } from "../../hooks/useHotkeyHold";
 import FilterableDropdown from "../FilterableDropdown/FilterableDropdown";
+import { saveGraph } from "../../store/savedGraphsSlice";
+import LoadGraphModal from "../LoadGraphModal/LoadGraphModal";
+import AddToGraphButton from "../AddToGraphButton/AddToGraphButton";
+import DocumentPopup from "../DocumentPopup/DocumentPopup";
 
 // Main React component for D3 force-directed graph, wrapped in memo for performance.
 // Orchestrates Redux state, user interactions, and D3 instance.
 const ForceGraph = ({
-  nodeIds: originNodeIdsFromProps,
+  // Accept node IDs via props for direct linking (e.g., landing pages).
+  nodeIds: originNodeIdsFromProps = [],
   settings: settingsFromProps,
+  init_immediately,
 }) => {
   // Redux dispatch for triggering state changes.
   const dispatch = useDispatch();
@@ -52,10 +58,13 @@ const ForceGraph = ({
   const svgRef = useRef();
   const graphInstanceRef = useRef(null);
 
+  // Selects origin node IDs from nodesSlice for NodesSlice driven graphs.
+  const nodesSliceOriginNodeIds = useSelector(
+    (state) => state.nodesSlice.originNodeIds,
+  );
+
   // Selects state from Redux store, including graph data and history.
-  const { present, past, future } = useSelector((state) => state.graph);
   const {
-    settings,
     graphData,
     rawData,
     status,
@@ -65,12 +74,37 @@ const ForceGraph = ({
     collapsed,
     availableEdgeFilters,
     edgeFilterStatus,
-  } = present;
-  const canUndo = past.length > 0;
-  const canRedo = future.length > 0;
+  } = useSelector((state) => state.graph.present, shallowEqual);
+
+  // Select undo and redo state
+  const { canUndo, canRedo } = useSelector(
+    (state) => ({
+      canUndo: state.graph.past.length > 0,
+      canRedo: state.graph.future.length > 0,
+    }),
+    shallowEqual,
+  );
+
+  // Select settings state
+  const { settings, lastAppliedSettings } = useSelector(
+    (state) => ({
+      settings: state.graph.present.settings,
+      lastAppliedSettings: state.graph.present.lastAppliedSettings,
+    }),
+    shallowEqual,
+  );
+
+  // Calculate if settings are stale.
+  const isSettingsStale = useMemo(() => {
+    if (!lastAppliedSettings) {
+      return false;
+    }
+    return JSON.stringify(settings) !== JSON.stringify(lastAppliedSettings);
+  }, [settings, lastAppliedSettings]);
 
   // Local component state for UI and temporary flags.
   const [collections, setCollections] = useState([]);
+  const [allCollections, setAllCollections] = useState([]);
   const collectionMaps = useMemo(() => new Map(collMaps.maps), []); // Memoizing to avoid refetching.
   const [isRestoring, setIsRestoring] = useState(false);
   const [optionsVisible, setOptionsVisible] = useState(false);
@@ -82,22 +116,26 @@ const ForceGraph = ({
     nodeLabel: null,
     position: { x: 0, y: 0 },
   });
+  const [isLoadModalOpen, setIsLoadModalOpen] = useState(false);
 
-  // Initializes or resets graph when origin nodes from props change.
+  // Immediately render graph on document pages
   useEffect(() => {
-    if (
-      JSON.stringify(originNodeIdsFromProps) !== JSON.stringify(originNodeIds)
-    ) {
-      dispatch(initializeGraph({ nodeIds: originNodeIdsFromProps }));
+    if (init_immediately) {
+      dispatch(initializeGraph({ nodeIds: originNodeIds }));
     }
-  }, [originNodeIdsFromProps, dispatch]);
+  }, [dispatch]);
 
   // Fetches list of available data collections on component mount.
   useEffect(() => {
+    // Get both collections for current subgraph and full list.
     fetchCollections(settings.graphType).then((data) => {
       const parsed = parseCollections(data);
       setCollections(parsed);
       dispatch(setAvailableCollections(parsed));
+    });
+    fetchCollections("ontologies").then((data) => {
+      const parsed = parseCollections(data);
+      setAllCollections(parsed);
     });
   }, [dispatch, settings.graphType]);
 
@@ -123,24 +161,12 @@ const ForceGraph = ({
     );
   }, [settingsFromProps, collections, dispatch]);
 
-  // Triggers new data fetch when core graph settings change.
+  // Triggers new data fetch when graph is explicitly initialized in the slice.
   useEffect(() => {
-    if (isRestoring === false && originNodeIds && originNodeIds.length > 0) {
+    if (lastActionType === "initializeGraph") {
       dispatch(fetchAndProcessGraph());
     }
-  }, [
-    originNodeIds,
-    settings.depth,
-    settings.edgeDirection,
-    settings.allowedCollections,
-    settings.findShortestPaths,
-    settings.nodeLimit,
-    settings.graphType,
-    settings.collapseOnStart,
-    settings.edgeFilters,
-    settings.setOperation,
-    dispatch,
-  ]);
+  }, [lastActionType]);
 
   // Observes container size changes and resizes D3 graph accordingly.
   useEffect(() => {
@@ -168,7 +194,7 @@ const ForceGraph = ({
     const graphInstance = graphInstanceRef.current;
 
     // Handles state restoration for undo/redo actions.
-    if (isRestoring === true) {
+    if (isRestoring === true || lastActionType == "loadGraph") {
       if (graphInstance) {
         graphInstance.restoreGraph({
           nodes: graphData.nodes,
@@ -182,20 +208,22 @@ const ForceGraph = ({
       switch (lastActionType) {
         case "fetch/fulfilled":
         case "expand/fulfilled": {
-          if (
-            status !== "processing" ||
-            !rawData ||
-            Object.keys(rawData).length === 0
-          ) {
+          if (status !== "processing" || !rawData) {
             return;
           }
 
-          // Apply set operations for multi-node graphs.
-          const processedData = performSetOperation(
-            rawData,
-            settings.setOperation,
-            originNodeIds,
-          );
+          let processedData;
+          if (rawData && Object.keys(rawData).length > 0) {
+            // Apply set operations for multi-node graphs.
+            processedData = performSetOperation(
+              rawData,
+              settings.setOperation,
+              originNodeIds,
+            );
+          } else {
+            // Init with an empty structure if there's no rawData.
+            processedData = { nodes: [], links: [] };
+          }
 
           // Creates D3 graph instance if it does not exist.
           if (!graphInstance) {
@@ -205,11 +233,12 @@ const ForceGraph = ({
             };
             const newGraphInstance = ForceGraphConstructor(
               svgRef.current,
-              { nodes: [], links: [] },
+              { nodes: processedData.nodes, links: processedData.links },
               {
                 onSimulationEnd: handleSimulationEnd,
                 saveInitial: false,
-                originNodeIds: settings.useFocusNodes ? originNodeIds : [],
+                useFocusNodes: settings.useFocusNodes,
+                originNodeIds: originNodeIds,
                 nodeFontSize: settings.nodeFontSize,
                 linkFontSize: settings.edgeFontSize,
                 initialLabelStates: settings.labelStates,
@@ -256,6 +285,7 @@ const ForceGraph = ({
             }
 
             graphInstance.updateGraph({
+              newOriginNodeIds: originNodeIds,
               newNodes: processedData.nodes,
               newLinks: processedData.links,
               resetData: lastActionType === "fetch/fulfilled",
@@ -354,8 +384,25 @@ const ForceGraph = ({
     dispatch(ActionCreators.redo());
   };
 
-  const handleSave = useCallback(() => console.log("Save triggered."), []);
-  const handleLoad = useCallback(() => console.log("Load triggered."), []);
+  const handleSave = useCallback(() => {
+    const graphName = window.prompt("Please enter a name for your graph:");
+    if (graphName) {
+      // Dispatch the saveGraph action with the current state.
+      dispatch(
+        saveGraph({
+          name: graphName,
+          originNodeIds: originNodeIds,
+          settings: settings,
+          graphData: graphData,
+        }),
+      );
+      alert(`Graph "${graphName}" saved successfully!`);
+    }
+  }, [dispatch, originNodeIds, settings, graphData]);
+
+  const handleLoad = useCallback(() => {
+    setIsLoadModalOpen(true);
+  }, []);
 
   // Memoizes hotkey configuration for undo, redo, save, and load.
   const hotkeyConfigs = useMemo(
@@ -459,13 +506,38 @@ const ForceGraph = ({
 
   // --- Local UI Handlers ---
   const handleNodeClick = (e, nodeData) => {
+    // Get the bounding box of the graph container.
     const chartRect = wrapperRef.current.getBoundingClientRect();
+
+    // Set leeway
+    const popupWidth = 200;
+    const popupHeight = 300;
+
+    // Initial click position relative to the chart container.
+    let x = e.clientX - chartRect.left;
+    let y = e.clientY - chartRect.top;
+
+    // Check for horizontal overflow (right edge).
+    if (x + popupWidth > chartRect.width) {
+      x = x - popupWidth;
+    }
+
+    // Check for vertical overflow (bottom edge).
+    if (y + popupHeight > chartRect.height) {
+      y = y - popupHeight;
+    }
+
+    // Ensure the popup does not go off the top or left of the screen.
+    x = Math.max(0, x);
+    y = Math.max(0, y);
+
+    // Set the final adjusted position and show the popup.
     setPopup({
       visible: true,
       nodeId: nodeData._id,
       nodeLabel: getLabel(nodeData),
       isEdge: nodeData._id.split("/")[0].includes("-"),
-      position: { x: e.clientX - chartRect.left, y: e.clientY - chartRect.top },
+      position: { x, y },
     });
   };
 
@@ -604,53 +676,41 @@ const ForceGraph = ({
         </div>
 
         {/* Right-click context menu for node actions. */}
-        <div
-          className="node-popup"
-          style={
-            popup.visible
-              ? {
-                  display: "flex",
-                  left: `${popup.position.x}px`,
-                  top: `${popup.position.y}px`,
-                }
-              : { display: "none" }
-          }
+        <DocumentPopup
+          isVisible={popup.visible}
+          position={popup.position}
+          onClose={handlePopupClose}
         >
-          <button>
-            <a
-              href={`/#/collections/${popup.nodeId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Go To "{popup.nodeLabel}"
-            </a>
-          </button>
+          <a
+            href={`/#/collections/${popup.nodeId}`}
+            rel="noopener noreferrer"
+            className="document-popup-button"
+          >
+            Go To "{popup.nodeLabel}"
+          </a>
           <button
+            className="document-popup-button"
             onClick={handleExpand}
             style={{ display: !popup.isEdge ? "block" : "none" }}
           >
             Expand
           </button>
           <button
+            className="document-popup-button"
             onClick={handleCollapse}
             style={{ display: !popup.isEdge ? "block" : "none" }}
           >
             Collapse Leaves
           </button>
           <button
+            className="document-popup-button"
             onClick={handleRemove}
             style={{ display: !popup.isEdge ? "block" : "none" }}
           >
             Remove Node
           </button>
-          <button
-            className="popup-close-button"
-            onClick={handlePopupClose}
-            aria-label="Close popup"
-          >
-            ×
-          </button>
-        </div>
+          <AddToGraphButton nodeId={popup.nodeId} text="Add to Graph" />
+        </DocumentPopup>
       </div>
 
       {/* Main side panel for all user-configurable graph options. */}
@@ -693,6 +753,19 @@ const ForceGraph = ({
           >
             Export
           </button>
+          {isSettingsStale && (
+              <div className="settings-apply-container">
+                <p>Your settings have changed.</p>
+                <button
+                    className="primary-action-button"
+                    onClick={() =>
+                        dispatch(initializeGraph({ nodeIds: originNodeIds }))
+                    }
+                >
+                  Apply Changes
+                </button>
+              </div>
+          )}
         </div>
         <div className="options-tabs-content">
           {activeTab === "general" && (
@@ -846,15 +919,15 @@ const ForceGraph = ({
               </div>
 
               <div className="option-group">
-                {/*<label>Saved Graphs</label>*/}
-                {/*<div className="save-load-controls">*/}
-                {/*  <button onClick={handleSave}>*/}
-                {/*    Save Current Graph <kbd>{isMac ? "⌘S" : "Ctrl+S"}</kbd>*/}
-                {/*  </button>*/}
-                {/*  <button onClick={handleLoad}>*/}
-                {/*    Load a Saved Graph <kbd>{isMac ? "⌘O" : "Ctrl+O"}</kbd>*/}
-                {/*  </button>*/}
-                {/*</div>*/}
+                <label>Saved Graphs</label>
+                <div className="save-load-controls">
+                  <button onClick={handleSave}>
+                    Save Current Graph <kbd>{isMac ? "⌘S" : "Ctrl+S"}</kbd>
+                  </button>
+                  <button onClick={handleLoad}>
+                    Load a Saved Graph <kbd>{isMac ? "⌘O" : "Ctrl+O"}</kbd>
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -900,7 +973,7 @@ const ForceGraph = ({
                 <FilterableDropdown
                   key="collection-filter"
                   label="Collections"
-                  options={collections}
+                  options={allCollections}
                   selectedOptions={settings.allowedCollections}
                   onOptionToggle={handleCollectionChange}
                   getOptionLabel={(collectionId) =>
@@ -964,6 +1037,11 @@ const ForceGraph = ({
           )}
         </div>
       </div>
+      {/* Render the modal for loading graphs */}
+      <LoadGraphModal
+        isOpen={isLoadModalOpen}
+        onClose={() => setIsLoadModalOpen(false)}
+      />
     </div>
   );
 };

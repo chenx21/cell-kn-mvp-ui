@@ -1,13 +1,19 @@
-import { useContext, useEffect, useRef, useState } from "react";
-import SelectedItemsTable from "../SelectedItemsTable/SelectedItemsTable";
+import React, {
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+} from "react";
 import SearchResultsTable from "../SearchResultsTable/SearchResultsTable";
 import { GraphContext } from "../../contexts/GraphContext";
 import { getAllSearchableFields } from "../Utils/Utils";
 
+// SVG Icon Component
 const SearchIcon = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
-    viewBox="0 0 24 24"
+    viewBox="0 0 24"
     fill="currentColor"
     className="search-icon"
   >
@@ -19,91 +25,53 @@ const SearchIcon = () => (
   </svg>
 );
 
-const SearchBar = ({
-  generateGraph,
-  selectedItems,
-  removeSelectedItem,
-  addSelectedItem,
-}) => {
+const SearchBar = () => {
   const containerRef = useRef(null);
   const debounceTimeoutRef = useRef(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [input, setInput] = useState(""); // Current value in the input field
+  const [input, setInput] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [showResults, setShowResults] = useState(false);
 
   const { graphType } = useContext(GraphContext);
 
-  const getSearchTerms = async (searchTerm, db) => {
+  // Text search function
+  const getSearchTerms = useCallback(async (currentSearchTerm, db) => {
     const searchableFields = getAllSearchableFields();
-
     try {
       const response = await fetch(`/arango_api/search/`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          search_term: searchTerm,
+          search_term: currentSearchTerm,
           db: db,
           search_fields: Array.from(searchableFields),
         }),
       });
-      if (!response.ok) {
-        const errorBody = await response.text();
-        throw new Error(
-          `HTTP error! status: ${response.status}, message: ${errorBody}`,
-        );
-      }
-      return response.json();
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
+      return await response.json();
     } catch (error) {
       console.error("Error fetching search terms:", error);
-      throw error; // Re-throw to be caught by caller
+      return [];
     }
-  };
+  }, []);
 
+  // Effect for fetching search results
   useEffect(() => {
     const fetchSearchResults = async () => {
-      try {
+      if (searchTerm.trim() !== "") {
         const data = await getSearchTerms(searchTerm, graphType);
         setSearchResults(data);
-      } catch (error) {
-        setSearchResults([]); // Clear results on error
+      } else {
+        setSearchResults([]);
       }
     };
 
-    if (searchTerm.trim() !== "") {
-      fetchSearchResults();
-    } else {
-      setSearchResults([]);
-    }
-  }, [searchTerm, graphType]);
+    fetchSearchResults();
+  }, [searchTerm, graphType, getSearchTerms]);
 
-  const handleSearch = (event) => {
-    const value = event.target.value;
-    setInput(value);
-
-    if (debounceTimeoutRef.current) {
-      clearTimeout(debounceTimeoutRef.current);
-    }
-
-    debounceTimeoutRef.current = setTimeout(() => {
-      setSearchTerm(value);
-      setShowResults(true);
-    }, 250);
-  };
-
-  const showR = () => {
-    setShowResults(true);
-  };
-
-  function handleSelectItem(item) {
-    addSelectedItem(item);
-    setShowResults(false);
-    setInput("");
-    setSearchTerm("");
-  }
-
+  // Effect for handling clicks outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
@@ -113,18 +81,24 @@ const SearchBar = ({
         setShowResults(false);
       }
     };
-
     document.addEventListener("mousedown", handleClickOutside);
-
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
-      if (debounceTimeoutRef.current) {
-        clearTimeout(debounceTimeoutRef.current);
-      }
+      if (debounceTimeoutRef.current) clearTimeout(debounceTimeoutRef.current);
     };
   }, []);
 
-  // Determine if the dropdown should actually be visible
+  // Search input handler
+  const handleSearch = (event) => {
+    const value = event.target.value;
+    setInput(value);
+    if (debounceTimeoutRef.current) clearTimeout(debounceTimeoutRef.current);
+    debounceTimeoutRef.current = setTimeout(() => {
+      setSearchTerm(value);
+      if (value.trim() !== "") setShowResults(true);
+    }, 250);
+  };
+
   const shouldDropdownBeVisible = showResults && input.trim() !== "";
 
   return (
@@ -137,28 +111,16 @@ const SearchBar = ({
             placeholder="Search NCKN..."
             value={input}
             onChange={handleSearch}
-            onMouseEnter={showR}
+            onFocus={() => setShowResults(true)}
           />
           <SearchIcon />
         </div>
         <div
-          className={`search-results-dropdown ${
-            shouldDropdownBeVisible ? "show" : ""
-          }`}
+          className={`search-results-dropdown ${shouldDropdownBeVisible ? "show" : ""}`}
         >
-          <SearchResultsTable
-            searchResults={searchResults}
-            handleSelectItem={handleSelectItem}
-          />
+          <SearchResultsTable searchResults={searchResults} />
         </div>
       </div>
-      {selectedItems && selectedItems.length > 0 && (
-        <SelectedItemsTable
-          selectedItems={selectedItems}
-          generateGraph={generateGraph}
-          removeSelectedItem={removeSelectedItem}
-        />
-      )}
     </div>
   );
 };

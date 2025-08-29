@@ -3,15 +3,28 @@ import * as d3 from "d3";
 import { getLabel, truncateString } from "../Utils/Utils";
 import { getColorForCollection } from "../../services/ColorServices/ColorServices";
 
-const TreeConstructor = ({ data }) => {
+/**
+ * Tree Constructor Component.
+ * A presentational component responsible for rendering a D3-based
+ * collapsible tree visualization.
+ *
+ * @param {object} data - The hierarchical data object for the tree.
+ * @param {function} onNodeEnter - Callback invoked when a new node's DOM element is created.
+ * @param {function} onNodeExit - Callback invoked when a node's DOM element is about to be removed.
+ */
+const TreeConstructor = ({ data, onNodeEnter, onNodeExit }) => {
+  // A ref to the container element where the D3 SVG will be mounted.
   const svgRef = useRef(null);
 
+  // The main effect hook that contains all D3 logic.
   useEffect(() => {
+    // Guard against running without necessary data or DOM element.
     if (!data || !svgRef.current) {
-      return; // Do nothing if no data or ref is not available
+      return;
     }
 
-    // Clear any previous SVG content
+    // --- D3 Setup and Configuration ---
+    // Clear any previous SVG to prevent duplicates on data change.
     d3.select(svgRef.current).selectAll("*").remove();
 
     const width = 928;
@@ -19,12 +32,11 @@ const TreeConstructor = ({ data }) => {
     const marginRight = 10;
     const marginBottom = 10;
     const marginLeft = 120;
+    const maxLabelLength = 12;
 
     const root = d3.hierarchy(data);
     const dx = 10;
     const dy = (width - marginRight - marginLeft) / (1 + root.height);
-
-    const maxLabelLength = 12;
 
     const tree = d3.tree().nodeSize([dx, dy]);
     const diagonal = d3
@@ -32,17 +44,16 @@ const TreeConstructor = ({ data }) => {
       .x((d) => d.y)
       .y((d) => d.x);
 
-    // Create the SVG container using d3.create, then append it to ref
     const svg = d3
-      .create("svg")
+      .select(svgRef.current)
+      .append("svg")
       .attr("width", width)
-      // Initial height, will be adjusted by update function
       .attr("height", dx)
       .attr("viewBox", [-marginLeft, -marginTop, width, dx])
-      .attr(
-        "style",
-        "max-width: 100%; height: auto; font: 10px sans-serif; user-select: none;",
-      );
+      .style("max-width", "100%")
+      .style("height", "auto")
+      .style("font", "10px sans-serif")
+      .style("user-select", "none");
 
     const gLink = svg
       .append("g")
@@ -56,6 +67,10 @@ const TreeConstructor = ({ data }) => {
       .attr("cursor", "pointer")
       .attr("pointer-events", "all");
 
+    /**
+     * The core D3 update function that handles the enter, update, and exit
+     * selections for nodes and links in the tree.
+     */
     function update(event, source) {
       const duration = event?.altKey ? 2500 : 250;
       const nodes = root.descendants().reverse();
@@ -71,62 +86,86 @@ const TreeConstructor = ({ data }) => {
       });
 
       const height = right.x - left.x + marginTop + marginBottom;
-
       const transition = svg
         .transition()
         .duration(duration)
         .attr("height", height)
-        .attr("viewBox", [-marginLeft, left.x - marginTop, width, height])
-        .tween(
-          "resize",
-          window.ResizeObserver ? null : () => () => svg.dispatch("toggle"),
-        );
+        .attr("viewBox", [-marginLeft, left.x - marginTop, width, height]);
 
-      const node = gNode.selectAll("g").data(nodes, (d) => d.id);
+      // --- Node Selection ---
+      const node = gNode.selectAll("g.node-group").data(nodes, (d) => d.id);
 
+      // Create new DOM elements for new data.
       const nodeEnter = node
         .enter()
         .append("g")
+        .attr("class", "node-group")
         .attr("transform", (d) => `translate(${source.y0},${source.x0})`)
         .attr("fill-opacity", 0)
         .attr("stroke-opacity", 0)
         .on("click", (event, d) => {
-          d.children = d.children ? null : d._children;
-          update(event, d);
+          // React handles adding to graph
+          if (event.target.closest(".add-to-graph-button")) {
+            return;
+          } else {
+            // Toggle children
+            d.children = d.children ? null : d._children;
+            update(event, d);
+          }
         });
 
+      // Append circle
       nodeEnter
         .append("circle")
         .attr("r", 2.5)
-        .attr("fill", (d) => {
-          if (d.data && d.data._id) {
-            // Ensure _id exists in the original data
-            const parts = d.data._id.split("/");
-            if (parts.length > 0) {
-              const collectionName = parts[0];
-              return getColorForCollection(collectionName);
-            }
-          }
-          return getColorForCollection(null);
-        })
-        .attr("stroke-width", 10); // Stroke for circle itself is not set, this is more like padding
+        .attr("fill", (d) => getColorForCollection(d.data._id.split("/")[0]))
+        .attr("stroke-width", 10);
 
+      // Append text
       nodeEnter
-        .append("text")
+        .append("text", "node-label-text")
         .attr("dy", "0.31em")
         .attr("x", (d) => (d._children ? -6 : 6))
         .attr("text-anchor", (d) => (d._children ? "end" : "start"))
-        .text((d) => {
-          const fullName = getLabel(d.data) || d.data._key || "Unknown";
-          return truncateString(fullName, maxLabelLength);
-        })
+        .text((d) =>
+          truncateString(getLabel(d.data) || d.data._key, maxLabelLength),
+        )
+        .clone(true)
+        .lower()
         .attr("stroke-linejoin", "round")
         .attr("stroke-width", 3)
-        .attr("stroke", "white")
-        .attr("paint-order", "stroke")
-        .append("title")
-        .text((d) => getLabel(d.data) || d.data._key || "Unknown");
+        .attr("stroke", "white");
 
+      // For each new node, create a foreignObject as a placeholder.
+      nodeEnter
+        .append("foreignObject")
+        .attr("width", 16)
+        .attr("height", 16)
+        .attr("y", -8)
+        .attr("x", (d) => {
+          const gap = 15;
+          // Estimate label size
+          const label = truncateString(
+            getLabel(d.data) || d.data._key,
+            maxLabelLength,
+          );
+          const textWidthEstimate = label.length * 6;
+          if (d._children) {
+            const textEndX = -6;
+            return textEndX - textWidthEstimate - gap;
+          } else {
+            return textWidthEstimate + gap;
+          }
+        })
+        .attr("pointer-events", "all")
+        .each(function (d) {
+          // Create a div for React to mount into.
+          const placeholder = document.createElement("div");
+          this.appendChild(placeholder);
+          onNodeEnter(d.data._id, placeholder);
+        });
+
+      // Transition existing nodes to their new positions.
       node
         .merge(nodeEnter)
         .transition(transition)
@@ -134,25 +173,32 @@ const TreeConstructor = ({ data }) => {
         .attr("fill-opacity", 1)
         .attr("stroke-opacity", 1);
 
+      // Remove and transition out old nodes.
       node
         .exit()
+        .each(function (d) {
+          // Notify the parent component that this node is being removed.
+          onNodeExit(d.data._id);
+        })
         .transition(transition)
         .remove()
         .attr("transform", (d) => `translate(${source.y},${source.x})`)
         .attr("fill-opacity", 0)
         .attr("stroke-opacity", 0);
 
+      // --- Link Selection ---
       const link = gLink.selectAll("path").data(links, (d) => d.target.id);
 
-      const linkEnter = link
+      link
         .enter()
         .append("path")
         .attr("d", (d) => {
           const o = { x: source.x0, y: source.y0 };
           return diagonal({ source: o, target: o });
-        });
-
-      link.merge(linkEnter).transition(transition).attr("d", diagonal);
+        })
+        .merge(link)
+        .transition(transition)
+        .attr("d", diagonal);
 
       link
         .exit()
@@ -169,33 +215,24 @@ const TreeConstructor = ({ data }) => {
       });
     }
 
+    // --- Initial Tree Setup ---
     root.x0 = dy / 2;
     root.y0 = 0;
     root.descendants().forEach((d, i) => {
       d.id = i;
       d._children = d.children;
-
-      // Collapse all nodes that have children by default
+      // Collapse all nodes by default on initial render.
       if (d.children) {
         d.children = null;
       }
     });
 
+    // Start the initial render.
     update(null, root);
+  }, [data, onNodeEnter, onNodeExit]);
 
-    // Append the D3-generated SVG to the host div.
-    svgRef.current.appendChild(svg.node());
-
-    // Cleanup function for when the component unmounts or data changes
-    return () => {
-      if (svgRef.current) {
-        d3.select(svgRef.current).selectAll("*").remove();
-      }
-    };
-  }, [data]);
-
-  // This div will be the container for the D3-generated SVG
-  return <div ref={svgRef} className="tree-constructor-container"></div>;
+  // Return container.
+  return <div ref={svgRef} className="tree-constructor-container" />;
 };
 
 export default TreeConstructor;

@@ -121,8 +121,12 @@ function renderGraph(simulation, nodes, links, d3, containers, options) {
   // For each new node, create visual representation.
   nodeEnter.each(function (d) {
     const nodeG = d3.select(this);
-    // Render as donut if node is an origin node.
-    if (options.originNodeIds && options.originNodeIds.includes(d.id)) {
+    // Render as donut if using focus nodes and node is an origin node.
+    if (
+      options.useFocusNodes &&
+      options.originNodeIds &&
+      options.originNodeIds.includes(d.id)
+    ) {
       // Outer circle.
       nodeG
         .append("circle")
@@ -904,6 +908,7 @@ function ForceGraphConstructor(
         onNodeClick: mergedOptions.onNodeClick,
         drag: mergedOptions.drag,
         originNodeIds: mergedOptions.originNodeIds,
+        useFocusNodes: mergedOptions.useFocusNodes,
         collectionMaps: mergedOptions.collectionMaps,
       },
     );
@@ -960,6 +965,7 @@ function ForceGraphConstructor(
   // Core function to update graph with new data.
   // Handles data processing, rendering, and simulation lifecycle.
   function updateGraph({
+    newOriginNodeIds = [],
     newNodes = [],
     newLinks = [],
     collapseNodes = [],
@@ -974,6 +980,11 @@ function ForceGraphConstructor(
     }
     // Sync internal label state with incoming state.
     currentLabelStates = { ...labelStates };
+
+    // Update originNodeIds
+    if (mergedOptions.useFocusNodes && newOriginNodeIds.length > 0) {
+      mergedOptions.originNodeIds = newOriginNodeIds;
+    }
 
     // Process and merge new data into internal state.
     processedNodes = processGraphData(
@@ -1038,6 +1049,7 @@ function ForceGraphConstructor(
         onNodeClick: mergedOptions.onNodeClick,
         drag: mergedOptions.drag,
         originNodeIds: mergedOptions.originNodeIds,
+        useFocusNodes: mergedOptions.useFocusNodes,
         collectionMaps: mergedOptions.collectionMaps,
       },
     );

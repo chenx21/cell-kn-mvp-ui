@@ -1,16 +1,52 @@
-import { configureStore } from "@reduxjs/toolkit";
+import { configureStore, combineReducers } from "@reduxjs/toolkit";
+import {
+  persistStore,
+  persistReducer,
+  FLUSH,
+  REHYDRATE,
+  PAUSE,
+  PERSIST,
+  PURGE,
+  REGISTER,
+} from "redux-persist";
+import storage from "redux-persist/lib/storage";
 import graphReducer from "./graphSlice";
+import nodesSliceReducer from "./nodesSlice";
+import savedGraphsReducer from "./savedGraphsSlice";
+
+const persistConfig = {
+  key: "root",
+  storage,
+  whitelist: ["nodesSlice", "savedGraphs"],
+};
+
+const rootReducer = combineReducers({
+  graph: graphReducer,
+  nodesSlice: nodesSliceReducer,
+  savedGraphs: savedGraphsReducer,
+});
+
+const persistedReducer = persistReducer(persistConfig, rootReducer);
 
 export const store = configureStore({
-  reducer: {
-    graph: graphReducer,
-  },
-  // redux-undo expected to be non-serializable
+  reducer: persistedReducer,
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
-        ignoredActions: ["graph/undo", "graph/redo", "graph/jump"],
+        ignoredActions: [
+          FLUSH,
+          REHYDRATE,
+          PAUSE,
+          PERSIST,
+          PURGE,
+          REGISTER,
+          "graph/undo",
+          "graph/redo",
+          "graph/jump",
+        ],
         ignoredPaths: ["graph.past", "graph.future", "graph._latestUnfiltered"],
       },
     }),
 });
+
+export const persistor = persistStore(store);
