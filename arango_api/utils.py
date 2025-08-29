@@ -163,8 +163,6 @@ def get_graph(
     # Execute the query
     cursor = db.aql.execute(aql_query, bind_vars=bind_vars)
 
-    print(aql_query)
-
     # Format the result
     results = {item["start_node_id"]: item["data"] for item in cursor}
 

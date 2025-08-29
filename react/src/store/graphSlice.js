@@ -1,6 +1,7 @@
-import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk, current } from "@reduxjs/toolkit";
 import undoable from "redux-undo";
 import { getFilterableEdgeFields } from "../components/Utils/Utils";
+import { performSetOperation } from "../components/ForceGraph/performSetOperation";
 
 // API helper to fetch graph data from backend.
 // Chooses endpoint based on whether shortest path is requested.
@@ -117,17 +118,16 @@ export const expandNode = createAsyncThunk(
         node_ids: [nodeIdToExpand],
         depth: 1,
         edge_direction: "ANY",
-        allowed_collections: settings.allowedCollections,
-        node_limit: settings.nodeLimit,
+        allowed_collections: [],
         graph: settings.graphType,
-        edge_filters: settings.edgeFilters,
+        edge_filters: [],
       }),
     });
     if (!response.ok) throw new Error("Expansion fetch failed");
     const expansionData = await response.json();
     return {
-      newNodes: expansionData.nodes?.[nodeIdToExpand]?.map((d) => d.node) || [],
-      newLinks: expansionData.links || [],
+      newNodes: expansionData?.[nodeIdToExpand].nodes || [],
+      newLinks: expansionData?.[nodeIdToExpand].links || [],
       centerNodeId: nodeIdToExpand,
     };
   },
@@ -360,36 +360,20 @@ const graphSlice = createSlice({
         state.lastActionType = "expand/pending";
       })
       .addCase(expandNode.fulfilled, (state, action) => {
+        // Get states
         const { newNodes, newLinks, centerNodeId } = action.payload;
+        const existingGraph = current(state.graphData);
+        const newGraph = { nodes: newNodes, links: newLinks };
 
-        // Merge new data from expansion into existing rawData.
-        const firstOrigin = state.originNodeIds[0];
-        const currentNodes =
-          firstOrigin && state.rawData.nodes[firstOrigin]
-            ? [...state.rawData.nodes[firstOrigin]]
-            : [];
-        const currentLinks = [...(state.rawData.links || [])];
-        const existingNodeIds = new Set(currentNodes.map((n) => n.node._id));
-        const existingLinkIds = new Set(currentLinks.map((l) => l._id));
+        // Perform a union operation to merge the graphs and remove duplicates.
+        const mergedGraph = performSetOperation(
+          [existingGraph, newGraph],
+          "Union",
+        );
 
-        newNodes.forEach((node) => {
-          if (!existingNodeIds.has(node._id)) {
-            currentNodes.push({ node: node, path: null });
-          }
-        });
-        newLinks.forEach((link) => {
-          if (!existingLinkIds.has(link._id)) {
-            currentLinks.push(link);
-          }
-        });
-
-        // Update state with merged data.
-        if (firstOrigin) {
-          state.rawData.nodes[firstOrigin] = currentNodes;
-        }
-        state.rawData.links = currentLinks;
+        // Update the state.
+        state.graphData = mergedGraph;
         state.nodeToCenter = centerNodeId;
-        state.status = "processing";
         state.lastActionType = "expand/fulfilled";
       })
       .addCase(expandNode.rejected, (state, action) => {

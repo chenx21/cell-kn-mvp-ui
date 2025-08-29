@@ -1,47 +1,41 @@
 /**
- * Performs a set operation (union, intersection, etc.) on multiple graph datasets.
+ * Performs a set operation on an array of graph objects.
  *
- * @param {object} data - The full dataset from the API, keyed by origin node IDs.
- * @param {string} operation - The set operation to perform: 'UNION', 'INTERSECTION', or 'SYMMETRIC_DIFFERENCE'.
- * @param {string[]} originNodeIds - An array of the start_node_ids to include in the operation.
- * @returns {{nodes: object[], links: object[]}} - A single, flat graph object.
+ * @param {object[]} graphs - An array of graph objects, each with { nodes, links }.
+ * @param {string} operation - The set operation: 'UNION', 'INTERSECTION', etc.
+ * @returns {{nodes: object[], links: object[]}} - A single, combined graph object.
  */
-export function performSetOperation(data, operation, originNodeIds) {
-  // Handle base cases
-  if (!originNodeIds || originNodeIds.length === 0) {
+export function performSetOperation(graphs, operation) {
+  // Handle base cases.
+  if (!graphs || graphs.length === 0) {
     return { nodes: [], links: [] };
   }
 
-  if (originNodeIds.length === 1) {
-    const singleNodeId = originNodeIds[0];
-    // Return the data for the single node, or empty arrays if it doesn't exist.
-    return data[singleNodeId] || { nodes: [], links: [] };
+  if (graphs.length === 1) {
+    return graphs[0] || { nodes: [], links: [] };
   }
 
-  // Aggregate all nodes and count their frequencies across graphs.
+  // Aggregate nodes and count their frequencies.
   const nodeFrequencyMap = new Map();
-  for (const nodeId of originNodeIds) {
-    // Safely access nodes, defaulting to an empty array.
-    const currentNodes = data[nodeId]?.nodes || [];
+  for (const graph of graphs) {
+    const currentNodes = graph?.nodes || [];
     for (const node of currentNodes) {
       if (nodeFrequencyMap.has(node._id)) {
-        // Increment count for existing node.
         nodeFrequencyMap.get(node._id).count++;
       } else {
-        // Add new node to the map.
         nodeFrequencyMap.set(node._id, { node: node, count: 1 });
       }
     }
   }
 
-  // Filter the aggregated nodes based on the requested operation.
+  // Filter nodes based on the operation.
   let finalNodes = [];
   const allEntries = Array.from(nodeFrequencyMap.values());
 
   switch (operation) {
     case "Intersection":
       finalNodes = allEntries
-        .filter((entry) => entry.count === originNodeIds.length)
+        .filter((entry) => entry.count === graphs.length)
         .map((entry) => entry.node);
       break;
 
@@ -53,7 +47,6 @@ export function performSetOperation(data, operation, originNodeIds) {
 
     case "Union":
     default:
-      // Union is the default behavior.
       finalNodes = allEntries.map((entry) => entry.node);
       break;
   }
@@ -63,15 +56,14 @@ export function performSetOperation(data, operation, originNodeIds) {
 
   // Aggregate all unique links and filter them.
   const uniqueLinks = new Map();
-  for (const nodeId of originNodeIds) {
-    const currentLinks = data[nodeId]?.links || [];
+  for (const graph of graphs) {
+    const currentLinks = graph?.links || [];
     for (const link of currentLinks) {
-      // Use a Map to automatically handle duplicate links across graphs.
       uniqueLinks.set(link._id, link);
     }
   }
 
-  // A link is kept only if both its source and target nodes are in the final set.
+  // A link is kept only if its source and target nodes are in the final set.
   const filteredLinks = Array.from(uniqueLinks.values()).filter(
     (link) => finalNodeIdSet.has(link._from) && finalNodeIdSet.has(link._to),
   );

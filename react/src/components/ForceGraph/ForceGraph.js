@@ -208,18 +208,26 @@ const ForceGraph = ({
       switch (lastActionType) {
         case "fetch/fulfilled":
         case "expand/fulfilled": {
-          if (status !== "processing" || !rawData) {
+          if (!rawData) {
             return;
           }
 
           let processedData;
-          if (rawData && Object.keys(rawData).length > 0) {
+          if (
+            rawData &&
+            Object.keys(rawData).length > 0 &&
+            lastActionType === "fetch/fulfilled"
+          ) {
             // Apply set operations for multi-node graphs.
-            processedData = performSetOperation(
-              rawData,
-              settings.setOperation,
-              originNodeIds,
+            const graphsToProcess = originNodeIds.map(
+              (nodeId) => rawData[nodeId],
             );
+            processedData = performSetOperation(
+              graphsToProcess,
+              settings.setOperation,
+            );
+          } else if (lastActionType === "expand/fulfilled") {
+            processedData = graphData;
           } else {
             // Init with an empty structure if there's no rawData.
             processedData = { nodes: [], links: [] };
@@ -236,7 +244,7 @@ const ForceGraph = ({
               { nodes: processedData.nodes, links: processedData.links },
               {
                 onSimulationEnd: handleSimulationEnd,
-                saveInitial: false,
+                saveInitial: true,
                 useFocusNodes: settings.useFocusNodes,
                 originNodeIds: originNodeIds,
                 nodeFontSize: settings.nodeFontSize,
