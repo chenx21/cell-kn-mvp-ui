@@ -21,7 +21,7 @@ def get_collections(collection_type, graph="ontologies"):
         collection
         for collection in all_collections
         if collection["type"] == collection_type
-        and not collection["name"].startswith("_")
+           and not collection["name"].startswith("_")
     ]
     return [collection["name"] for collection in collections]
 
@@ -46,12 +46,12 @@ def get_edges_by_id(edge_coll, dr, item_coll, item_id):
 
 
 def get_graph(
-    node_ids,
-    depth,
-    edge_direction,
-    allowed_collections,
-    graph,
-    edge_filters,
+        node_ids,
+        depth,
+        edge_direction,
+        allowed_collections,
+        graph,
+        edge_filters,
 ):
     """
     Constructs and executes a graph traversal AQL query.
@@ -169,86 +169,73 @@ def get_graph(
     return results
 
 
-def get_shortest_paths(node_ids, edge_direction):
-    combined_result = {"nodes": {}, "links": []}
-    link_ids = set()
+def get_shortest_paths(node_ids, edge_direction='ANY'):
+    """
+        Finds all shortest paths between every unique pair of nodes in a list
+        and returns a single, de-duplicated graph of the results.
 
-    # Loop over each unique pair (i, j) with i < j to avoid duplicate paths.
-    for i in range(len(node_ids) - 1):
-        for j in range(i + 1, len(node_ids)):
-            start_node = node_ids[i]
-            target_node = node_ids[j]
+        Args:
+            node_ids (list): A list of 2 or more node _id strings.
+            edge_direction (str, optional): Traversal direction.
+                Defaults to 'ANY'. Can be 'INBOUND' or 'OUTBOUND'.
 
-            query = f"""
-                LET paths = (
-                  FOR p IN {edge_direction} ALL_SHORTEST_PATHS @start_node TO @target_node
-                    GRAPH @graph_name
-                    RETURN p
-                )
+        Returns:
+            dict: A dictionary with a flat list of unique 'nodes' and 'links'
+                  comprising all the found shortest paths.
+        """
+    # Validate input.
+    if not isinstance(node_ids, list) or len(node_ids) < 2:
+        return {'nodes': [], 'links': []}
 
-                LET nodesArray = UNIQUE(
-                  FOR p IN paths
-                    FOR v IN p.vertices
-                      RETURN v
-                )
+    if edge_direction not in ['INBOUND', 'OUTBOUND', 'ANY']:
+        raise ValueError("edge_direction must be 'INBOUND', 'OUTBOUND', or 'ANY'")
 
-                LET linksArray = UNIQUE(
-                  FOR p IN paths
-                    FOR e IN p.edges
-                      RETURN e
-                )
+    # Prepare bind variables.
+    bind_vars = {
+        'node_ids': node_ids,
+        'graph': GRAPH_NAME_ONTOLOGIES
+    }
 
-                RETURN {{
-                  nodes: {{
-                    [@target_node]: (
-                      FOR v IN nodesArray 
-                        RETURN {{ node: v }}
+    # Construct AQL query.
+    aql_query = f"""
+        // Find all paths between all unique pairs.
+        LET all_paths = (
+            FOR start_node IN @node_ids
+                FOR end_node IN @node_ids
+                    // Process each unique pair only once.
+                    FILTER start_node < end_node
+
+                    // Find all shortest paths for the current pair.
+                    LET p = FIRST(
+                        FOR path IN {edge_direction} ALL_SHORTEST_PATHS start_node TO end_node GRAPH @graph
+                        RETURN path
                     )
-                  }},
-                  links: linksArray
-                }}
-            """
 
-            bind_vars = {
-                "start_node": start_node,
-                "target_node": target_node,
-                "graph_name": GRAPH_NAME_ONTOLOGIES,
-            }
+                    // Ignore pairs with no connecting path found.
+                    FILTER p != null 
+                    RETURN p
+        )
 
-            try:
-                cursor = db_ontologies.aql.execute(query, bind_vars=bind_vars)
-                result = list(cursor)[0]
+        // Aggregate and de-duplicate all vertices from all found paths.
+        LET all_nodes = UNIQUE(FLATTEN(all_paths[*].vertices))
 
-                # Merge node results: result["nodes"] is like { target_node: [ { node: v }, ... ] }
-                for node_id, node_list in result["nodes"].items():
-                    if node_id not in combined_result["nodes"]:
-                        combined_result["nodes"][node_id] = node_list
-                    else:
-                        # Optionally merge node lists without duplicates
-                        existing_ids = {
-                            n["node"]["_id"] for n in combined_result["nodes"][node_id]
-                        }
-                        for node_obj in node_list:
-                            if node_obj["node"]["_id"] not in existing_ids:
-                                combined_result["nodes"][node_id].append(node_obj)
+        // Aggregate and de-duplicate all edges from all found paths.
+        LET all_links = UNIQUE(FLATTEN(all_paths[*].edges))
 
-                # Merge links without duplicates
-                for link in result["links"]:
-                    link_id = link.get("_id")
-                    if link_id:
-                        if link_id not in link_ids:
-                            combined_result["links"].append(link)
-                            link_ids.add(link_id)
-                    else:
-                        if link not in combined_result["links"]:
-                            combined_result["links"].append(link)
+        // Return flat graph object.
+        RETURN {{
+            "nodes": all_nodes,
+            "links": all_links
+        }}
+        """
 
-            except Exception as e:
-                print(
-                    f"Error executing query for pair {start_node} to {target_node}: {e}"
-                )
+    # Execute the query.
+    cursor = db_ontologies.aql.execute(aql_query, bind_vars=bind_vars)
 
-    return combined_result
+    # The query returns a single document.
+    result = cursor.next()
+
+    return result
 
 
 def get_all():
@@ -330,12 +317,12 @@ def search_by_term(search_term, search_fields, db):
             RETURN sortedDocs
             """
     query = (
-        query_beginning
-        + levenshtein_string_0
-        + levenshtein_string_1
-        + exact_match_string
-        + n_gram_string
-        + query_end
+            query_beginning
+            + levenshtein_string_0
+            + levenshtein_string_1
+            + exact_match_string
+            + n_gram_string
+            + query_end
     )
 
     bind_vars = {"search_term": search_term}

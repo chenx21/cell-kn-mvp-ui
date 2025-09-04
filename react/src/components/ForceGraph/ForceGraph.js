@@ -261,26 +261,21 @@ const ForceGraph = ({
           }
 
           let processedData;
-          // Perform set operation is data exists.
-          if (
-            rawData &&
-            Object.keys(rawData).length > 0 &&
-            lastActionType === "fetch/fulfilled"
-          ) {
+          // Expand performs set operation in slice
+          if (lastActionType === "expand/fulfilled") {
+            processedData = graphData;
+            // Shortest paths return processed data
+          } else if (settings.findShortestPaths) {
+            processedData = rawData;
+          } else {
             // Apply set operations for multi-node graphs.
             const graphsToProcess = originNodeIds.map(
-              (nodeId) => rawData[nodeId],
+                (nodeId) => rawData[nodeId],
             );
             processedData = performSetOperation(
-              graphsToProcess,
-              settings.setOperation,
+                graphsToProcess,
+                settings.setOperation,
             );
-            // expand performs union before returning data.
-          } else if (lastActionType === "expand/fulfilled") {
-            processedData = graphData;
-          } else {
-            // Init with an empty structure if there's no rawData.
-            processedData = { nodes: [], links: [] };
           }
             // Updates existing graph instance with new data.
             let collapseList = finalCollapseList;
