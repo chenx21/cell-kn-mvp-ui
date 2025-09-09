@@ -195,6 +195,7 @@ const graphSlice = createSlice({
     updateSetting: (state, action) => {
       const { setting, value } = action.payload;
       state.settings[setting] = value;
+      console.log("Update setting:", value)
       state.lastActionType = "updateSetting";
     },
     // Sets final, processed graph data, including node positions.
@@ -215,7 +216,7 @@ const graphSlice = createSlice({
     },
     // Populates allowed collections after initial fetch.
     setAvailableCollections: (state, action) => {
-      state.settings.allowedCollections = action.payload;
+      state.availableCollections = action.payload;
       state.lastActionType = "setAvailableCollections";
     },
     // Updates user-selected edge filter for a specific field.

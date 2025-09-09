@@ -56,6 +56,7 @@ const ForceGraph = ({
   const wrapperRef = useRef();
   const svgRef = useRef();
   const graphInstanceRef = useRef(null);
+  const hasInitializedGraph = useRef(false);
 
   // Selects origin node IDs from nodesSlice for NodesSlice driven graphs.
   const nodesSliceOriginNodeIds = useSelector(
@@ -123,7 +124,7 @@ const ForceGraph = ({
     fetchCollections(settings.graphType).then((data) => {
       const parsed = parseCollections(data);
       setCollections(parsed);
-      dispatch(setAvailableCollections(parsed));
+      // dispatch(setAvailableCollections(parsed));
     });
     fetchCollections("ontologies").then((data) => {
       const parsed = parseCollections(data);
@@ -155,10 +156,15 @@ const ForceGraph = ({
 
   // Triggers new data fetch when graph is explicitly initialized in the slice.
   useEffect(() => {
-    if (lastActionType === "initializeGraph") {
+    // Load if called for it and collections are populated
+    if (lastActionType === "initializeGraph" && settings.allowedCollections.length > 0) {
       dispatch(fetchAndProcessGraph());
+      // Or load when collections are populated and has not been loaded before
+    } else if (settings.allowedCollections.length > 0 && !hasInitializedGraph.current){
+      dispatch(fetchAndProcessGraph());
+      hasInitializedGraph.current = true
     }
-  }, [lastActionType]);
+  }, [dispatch, settings.allowedCollections, lastActionType]);
 
   // Observes container size changes and resizes D3 graph accordingly.
   useEffect(() => {
