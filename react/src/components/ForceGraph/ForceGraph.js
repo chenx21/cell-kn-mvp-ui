@@ -24,6 +24,7 @@ import {
   setGraphData,
   initializeGraph,
   setAvailableCollections,
+  setAllCollections,
   expandNode,
   setInitialCollapseList,
   uncollapseNode,
@@ -103,8 +104,6 @@ const ForceGraph = ({
   }, [settings, lastAppliedSettings]);
 
   // Local component state for UI and temporary flags.
-  const [collections, setCollections] = useState([]);
-  const [allCollections, setAllCollections] = useState([]);
   const collectionMaps = useMemo(() => new Map(collMaps.maps), []); // Memoizing to avoid refetching.
   const [isRestoring, setIsRestoring] = useState(false);
   const [optionsVisible, setOptionsVisible] = useState(false);
@@ -123,12 +122,11 @@ const ForceGraph = ({
     // Get both collections for current subgraph and full list.
     fetchCollections(settings.graphType).then((data) => {
       const parsed = parseCollections(data);
-      setCollections(parsed);
-      // dispatch(setAvailableCollections(parsed));
+      dispatch(setAvailableCollections(parsed));
     });
     fetchCollections("ontologies").then((data) => {
       const parsed = parseCollections(data);
-      setAllCollections(parsed);
+      dispatch(setAllCollections(parsed));
     });
   }, [dispatch, settings.graphType]);
 
@@ -140,10 +138,10 @@ const ForceGraph = ({
   // Applies collection filters passed via props.
   useEffect(() => {
     const collectionsToPrune = settingsFromProps?.collectionsToPrune;
-    if (collectionsToPrune === undefined || collections.length === 0) {
+    if (collectionsToPrune === undefined || settings.availableCollections.length === 0) {
       return;
     }
-    const newAllowedCollections = collections.filter(
+    const newAllowedCollections = settings.availableCollections.filter(
       (coll) => !collectionsToPrune.includes(coll),
     );
     dispatch(
@@ -152,15 +150,12 @@ const ForceGraph = ({
         value: newAllowedCollections,
       }),
     );
-  }, [settingsFromProps, collections, dispatch]);
+  }, [settingsFromProps, settings.availableCollections, dispatch]);
 
   // Triggers new data fetch when graph is explicitly initialized in the slice.
   useEffect(() => {
-    // Load if called for it and collections are populated
-    if (lastActionType === "initializeGraph" && settings.allowedCollections.length > 0) {
-      dispatch(fetchAndProcessGraph());
-      // Or load when collections are populated and has not been loaded before
-    } else if (settings.allowedCollections.length > 0 && !hasInitializedGraph.current){
+    // Load if called for it and collections are populated OR if settings update and has not yet populated
+    if (lastActionType === "initializeGraph" && settings.allowedCollections.length > 0 || !hasInitializedGraph.current && lastActionType === "updateSetting") {
       dispatch(fetchAndProcessGraph());
       hasInitializedGraph.current = true
     }
@@ -192,7 +187,7 @@ const ForceGraph = ({
 
     // Creates D3 graph instance if it does not exist.
     const graphInstance = graphInstanceRef.current;
-    if (!graphInstance) {
+    if (!graphInstance && settings.availableCollections.length > 0) {
       // Callback to save final node positions to Redux after simulation.
       const handleSimulationEnd = (finalNodes, finalLinks) => {
         dispatch(setGraphData({nodes: finalNodes, links: finalLinks}));
@@ -209,7 +204,7 @@ const ForceGraph = ({
             nodeFontSize: settings.nodeFontSize,
             linkFontSize: settings.edgeFontSize,
             initialLabelStates: settings.labelStates,
-            nodeGroups: collections,
+            nodeGroups: settings.availableCollections,
             collectionMaps: collectionMaps,
             onNodeClick: handleNodeClick,
             onNodeDragEnd: handleNodeDragEnd,
@@ -312,7 +307,7 @@ const ForceGraph = ({
         }
       }
     }
-  }, [rawData, graphData]);
+  }, [rawData, graphData, settings.availableCollections]);
 
   // Updates D3 node font size when setting changes.
   useEffect(() => {
@@ -465,7 +460,7 @@ const ForceGraph = ({
     handleSettingChange("allowedCollections", newAllowed);
   };
   const handleAllOn = () =>
-    handleSettingChange("allowedCollections", collections);
+    handleSettingChange("allowedCollections", settings.availableCollections);
   const handleAllOff = () => handleSettingChange("allowedCollections", []);
   const handleLabelToggle = (labelClass) => {
     const newLabelStates = {
@@ -980,7 +975,7 @@ const ForceGraph = ({
                 <FilterableDropdown
                   key="collection-filter"
                   label="Collections"
-                  options={allCollections}
+                  options={settings.allCollections}
                   selectedOptions={settings.allowedCollections}
                   onOptionToggle={handleCollectionChange}
                   getOptionLabel={(collectionId) =>

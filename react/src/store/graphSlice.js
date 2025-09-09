@@ -140,7 +140,9 @@ const initialState = {
     depth: 2,
     edgeDirection: "ANY",
     setOperation: "Union",
-    allowedCollections: [],
+    allowedCollections: [], // Collections currently allowed in query
+    availableCollections: [], // Collections currently in DB
+    allCollections: [], // Collections in all DB
     nodeFontSize: 12,
     edgeFontSize: 8,
     nodeLimit: 5000,
@@ -214,10 +216,17 @@ const graphSlice = createSlice({
       state.graphData = { nodes: [], links: [] };
       state.collapsed = { initial: [], userDefined: [], userIgnored: [] };
     },
-    // Populates allowed collections after initial fetch.
+    // Populates available collections after initial fetch.
     setAvailableCollections: (state, action) => {
-      state.availableCollections = action.payload;
+      state.settings.availableCollections = action.payload;
+      // Default value.
+      state.settings.allowedCollections = action.payload;
       state.lastActionType = "setAvailableCollections";
+    },
+    // Populates all collections after initial fetch.
+    setAllCollections: (state, action) => {
+      state.settings.allCollections = action.payload;
+      state.lastActionType = "setAllCollections";
     },
     // Updates user-selected edge filter for a specific field.
     updateEdgeFilter: (state, action) => {
@@ -389,6 +398,7 @@ export const {
   setGraphData,
   initializeGraph,
   setAvailableCollections,
+  setAllCollections,
   clearNodeToCenter,
   updateNodePosition,
   setInitialCollapseList,
