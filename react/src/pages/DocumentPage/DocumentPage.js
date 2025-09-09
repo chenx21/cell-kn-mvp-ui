@@ -114,7 +114,6 @@ const DocumentPage = () => {
             <ForceGraph
               nodeIds={nodeIds}
               settings={forceGraphSettings}
-              init_immediately={true}
             />
           </div>
         </div>

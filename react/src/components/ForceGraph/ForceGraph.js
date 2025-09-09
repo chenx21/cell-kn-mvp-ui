@@ -48,7 +48,6 @@ const ForceGraph = ({
   // Accept node IDs via props for direct linking (e.g., landing pages).
   nodeIds: originNodeIdsFromProps = [],
   settings: settingsFromProps,
-  init_immediately,
 }) => {
   // Redux dispatch for triggering state changes.
   const dispatch = useDispatch();
@@ -117,13 +116,6 @@ const ForceGraph = ({
     position: { x: 0, y: 0 },
   });
   const [isLoadModalOpen, setIsLoadModalOpen] = useState(false);
-
-  // Immediately render graph on document pages
-  useEffect(() => {
-    if (init_immediately) {
-      dispatch(initializeGraph({ nodeIds: originNodeIds }));
-    }
-  }, [dispatch]);
 
   // Fetches list of available data collections on component mount.
   useEffect(() => {
