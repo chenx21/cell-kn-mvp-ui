@@ -209,7 +209,6 @@ const graphSlice = createSlice({
       state.status = "idle";
       state.lastActionType = "initializeGraph";
       state.lastAppliedOriginNodeIds = action.payload.nodeIds;
-      // state.lastAppliedSettings = state.settings;
       state.rawData = {};
       state.graphData = { nodes: [], links: [] };
       state.collapsed = { initial: [], userDefined: [], userIgnored: [] };
