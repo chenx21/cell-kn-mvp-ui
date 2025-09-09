@@ -2605,3 +2605,7 @@ a.document-popup-button {
 .hidden {
   display: none;
 }
+
+.flex-full{
+  flex: 0 0 100%;
+}
