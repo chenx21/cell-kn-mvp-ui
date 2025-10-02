@@ -12,6 +12,7 @@ import { initializeGraph, loadGraphFromJson } from "../../store/graphSlice";
 import { removeNodeFromSlice } from "../../store/nodesSlice";
 import SelectedItemsTable from "../../components/SelectedItemsTable/SelectedItemsTable";
 import ForceGraph from "../../components/ForceGraph/ForceGraph";
+import { fetchNodeDetailsByIds } from "../../components/Utils/Utils";
 import LoadGraphModal from "../../components/LoadGraphModal/LoadGraphModal";
 
 const GraphPage = () => {
@@ -37,25 +38,6 @@ const GraphPage = () => {
     return JSON.stringify(nodeIds) !== JSON.stringify(lastAppliedOriginNodeIds);
   }, [nodeIds, lastAppliedOriginNodeIds, showGraph]);
 
-  // Data Fetching
-  const fetchNodeDetailsByIds = useCallback(async (ids, db) => {
-    if (!ids || ids.length === 0) return [];
-    setIsLoading(true);
-    try {
-      const response = await fetch(`/arango_api/document/details`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ document_ids: ids, db: db }),
-      });
-      if (!response.ok) throw new Error(`Failed to fetch node details`);
-      return await response.json();
-    } catch (error) {
-      console.error("Error fetching node details:", error);
-      return [];
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
 
   // Init graph on component load.
   useEffect(() => {
@@ -75,8 +57,10 @@ const GraphPage = () => {
       );
 
       if (missingIds.length > 0) {
+        setIsLoading(true);
         const newObjects = await fetchNodeDetailsByIds(missingIds, graphType);
         setSelectedItemObjects([...stillSelectedObjects, ...newObjects]);
+        setIsLoading(false);
       } else {
         setSelectedItemObjects(stillSelectedObjects);
       }

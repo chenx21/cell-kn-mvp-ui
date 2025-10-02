@@ -17,6 +17,7 @@ import {
   fetchCollections,
   hasNodesInRawData,
   isMac,
+  fetchNodeDetailsByIds as fetchNodeDetailsByIdsHelper,
 } from "../Utils/Utils";
 import {
   fetchAndProcessGraph,
@@ -108,6 +109,85 @@ const ForceGraph = ({
       }),
       shallowEqual,
     );
+
+  // Memoized map from nodeId -> display label (uses getLabel fallback).
+  const nodeNameMap = useMemo(() => {
+    const map = new Map();
+    if (graphData && Array.isArray(graphData.nodes)) {
+      graphData.nodes.forEach((n) => {
+        const id = n._id || n.id;
+        if (id) {
+          try {
+            map.set(id, getLabel(n));
+          } catch (err) {
+            map.set(id, id);
+          }
+        }
+      });
+    }
+    return map;
+  }, [graphData]);
+
+  // Local cache for nodeId that persists in localStorage for 24 hours.
+  const [cachedNames, setCachedNames] = useState(() => {
+    try {
+      const raw = localStorage.getItem("cellkn_nodeNameCache");
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      const age = Date.now() - (parsed.ts || 0);
+      const ONE_DAY_MS = 24 * 60 * 60 * 1000; // 24 hours
+      if (age < ONE_DAY_MS) {
+        return parsed.names || {};
+      }
+      // expired
+      localStorage.removeItem("cellkn_nodeNameCache");
+      return {};
+    } catch (err) {
+      return {};
+    }
+  });
+
+  const persistCachedNames = (newNames) => {
+    try {
+      const merged = { ...(cachedNames || {}), ...(newNames || {}) };
+      setCachedNames(merged);
+      localStorage.setItem(
+        "cellkn_nodeNameCache",
+        JSON.stringify({ ts: Date.now(), names: merged }),
+      );
+    } catch (err) {
+      // ignore
+    }
+  };
+
+  // Use the shared helper from Utils. Adapt results to a map and persist.
+  const fetchNodeDetailsByIds = useCallback(
+    async (ids = []) => {
+      if (!ids || ids.length === 0) return {};
+      const results = await fetchNodeDetailsByIdsHelper(ids, settings.graphType);
+      const mapped = {};
+      if (Array.isArray(results)) {
+        results.forEach((item) => {
+          const id = item._id || item.id;
+          if (id) mapped[id] = getLabel(item) || id;
+        });
+      }
+      persistCachedNames(mapped);
+      return mapped;
+    },
+    [settings.graphType, fetchNodeDetailsByIdsHelper],
+  );
+
+  // Ensure origin node labels are available: prefer graphData labels, then cached, otherwise fetch and cache them.
+  useEffect(() => {
+    if (!originNodeIds || originNodeIds.length === 0) return;
+    const missing = originNodeIds.filter(
+      (id) => !(nodeNameMap && nodeNameMap.get(id)) && !cachedNames[id],
+    );
+    if (missing.length === 0) return;
+    // fire-and-forget
+    fetchNodeDetailsByIds(missing).catch(() => {});
+  }, [originNodeIds, nodeNameMap, cachedNames, fetchNodeDetailsByIds]);
 
   // Local component state for UI and temporary flags.
   const collectionMaps = useMemo(() => new Map(collMaps.maps), []); // Memoizing to avoid refetching.
@@ -860,7 +940,7 @@ const ForceGraph = ({
                       className={`tab-button ${activeOriginNodeId === nodeId ? "active" : ""}`}
                       onClick={() => setActiveOriginNodeId(nodeId)}
                     >
-                      {getLabel({ _id: nodeId, label: nodeId })}
+                      {nodeNameMap.get(nodeId) || cachedNames[nodeId] || nodeId}
                     </button>
                   ))}
                 </div>
