@@ -215,9 +215,6 @@ const ForceGraph = ({
   useEffect(() => {
     const graphInstance = graphInstanceRef.current;
     if (!graphInstance && settings.availableCollections.length > 0) {
-      const handleSimulationEnd = (finalNodes, finalLinks) => {
-        dispatch(setGraphData({ nodes: finalNodes, links: finalLinks }));
-      };
       const newGraphInstance = ForceGraphConstructor(
         svgRef.current,
         { nodes: [], links: [] },
@@ -470,6 +467,14 @@ const ForceGraph = ({
     [dispatch],
   );
 
+  // Handler for when a simulation finishes.
+  const handleSimulationEnd = useCallback(
+    (finalNodes, finalLinks) => {
+      dispatch(setGraphData({ nodes: finalNodes, links: finalLinks }));
+    },
+    [dispatch],
+  );
+
   const handleUndo = () => {
     setIsRestoring(true);
     dispatch(ActionCreators.undo());
@@ -518,7 +523,17 @@ const ForceGraph = ({
   }, [settings.labelStates]);
 
   const handleSimulationOff = useCallback(() => {
+    // Turn off live simulation and then capture final node/link positions
     graphInstanceRef.current?.toggleSimulation(false);
+    try {
+      const current = graphInstanceRef.current?.getCurrentGraph?.();
+      if (current) {
+        // Reuse the same handler we pass into the constructor so behavior is consistent.
+        handleSimulationEnd(current.nodes, current.links);
+      }
+    } catch (err) {
+      console.error("Failed to capture graph on simulation off:", err);
+    }
   }, []);
 
   useHotkeyHold("s", handleSimulationOn, handleSimulationOff);

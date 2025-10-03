@@ -1113,6 +1113,16 @@ function ForceGraphConstructor(
     toggleLabels,
     centerOnNode,
     resize,
+    // Returns the current node/link state suitable for saving.
+    getCurrentGraph: () => {
+      const finalNodes = processedNodes.map(({ x, y, index, vx, vy, ...rest }) => ({ x, y, ...rest }));
+      const finalLinks = processedLinks.map(({ source, target, ...rest }) => ({
+        ...rest,
+        source: source.id || source,
+        target: target.id || target,
+      }));
+      return { nodes: finalNodes, links: finalLinks };
+    },
     toggleSimulation: (on, incomingLabelStates = {}) => {
       if (on) {
         // If simulation is already live, do nothing.
