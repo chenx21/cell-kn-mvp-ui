@@ -15,6 +15,7 @@ import AboutPage from "./pages/AboutPage/AboutPage";
 import FTUExplorerPage from "./pages/FTUExplorerPage/FTUExplorerPage";
 import { FtuPartsProvider } from "./contexts/FTUPartsContext";
 import GraphPage from "./pages/GraphPage/GraphPage";
+import NotFoundPage from "./pages/NotFoundPage/NotFoundPage";
 
 function App() {
   return (
@@ -42,6 +43,7 @@ function App() {
                   <Route path="/tree" element={<TreePage />} />
                   <Route path="/sunburst" element={<SunburstPage />} />
                   <Route path="/" element={<SearchPage />} />
+                  <Route path="*" element={<NotFoundPage />} />
                 </Routes>
               </div>
               <Footer />
