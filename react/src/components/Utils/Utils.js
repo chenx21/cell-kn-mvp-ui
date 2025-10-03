@@ -23,6 +23,28 @@ export const fetchCollections = async (graphType) => {
   return response.json();
 };
 
+/**
+ * Fetch node/document details for a list of IDs from the backend.
+ * Returns an array of document objects (or empty array on error).
+ * @param {Array<string>} ids
+ * @param {string} db - database identifier (graph type)
+ */
+export const fetchNodeDetailsByIds = async (ids = [], db) => {
+  if (!ids || ids.length === 0) return [];
+  try {
+    const response = await fetch(`/arango_api/document/details`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ document_ids: ids, db }),
+    });
+    if (!response.ok) throw new Error(`Failed to fetch node details`);
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching node details:", error);
+    return [];
+  }
+};
+
 export const hasAnyNodes = (data, nodeId) => {
   // Check if data, data.nodes exist and are objects.
   if (
