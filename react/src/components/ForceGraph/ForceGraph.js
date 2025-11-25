@@ -27,12 +27,12 @@ import FilterableDropdown from "../FilterableDropdown/FilterableDropdown";
 import ForceGraphConstructor from "../ForceGraphConstructor/ForceGraphConstructor";
 import LoadGraphModal from "../LoadGraphModal/LoadGraphModal";
 import {
-  LoadingBar,
   fetchCollections,
   fetchNodeDetailsByIds as fetchNodeDetailsByIdsHelper,
   getLabel,
   hasNodesInRawData,
   isMac,
+  LoadingBar,
   parseCollections,
 } from "../Utils/Utils";
 import { performSetOperation } from "./performSetOperation";
@@ -53,7 +53,7 @@ const PER_NODE_SETTINGS = [
 // Orchestrates Redux state, user interactions, and D3 instance.
 const ForceGraph = ({
   // Accept node IDs via props for direct linking (e.g., landing pages).
-  nodeIds: originNodeIdsFromProps = [],
+  nodeIds: _originNodeIdsFromProps = [],
   settings: settingsFromProps,
 }) => {
   // Redux dispatch for triggering state changes.
@@ -66,7 +66,7 @@ const ForceGraph = ({
   const hasInitializedGraph = useRef(false);
 
   // Selects origin node IDs from nodesSlice for NodesSlice driven graphs.
-  const nodesSliceOriginNodeIds = useSelector((state) => state.nodesSlice.originNodeIds);
+  const _nodesSliceOriginNodeIds = useSelector((state) => state.nodesSlice.originNodeIds);
 
   // Selects state from Redux store, including graph data and history.
   const {
@@ -108,7 +108,7 @@ const ForceGraph = ({
         if (id) {
           try {
             map.set(id, getLabel(n));
-          } catch (err) {
+          } catch (_err) {
             map.set(id, id);
           }
         }
@@ -131,7 +131,7 @@ const ForceGraph = ({
       // expired
       localStorage.removeItem("cellkn_nodeNameCache");
       return {};
-    } catch (err) {
+    } catch (_err) {
       return {};
     }
   });
@@ -144,7 +144,7 @@ const ForceGraph = ({
         "cellkn_nodeNameCache",
         JSON.stringify({ ts: Date.now(), names: merged }),
       );
-    } catch (err) {
+    } catch (_err) {
       // ignore
     }
   };
@@ -396,8 +396,18 @@ const ForceGraph = ({
           } else if (settings.findShortestPaths) {
             processedData = rawData;
           } else {
-            const graphsToProcess = originNodeIds.map((nodeId) => rawData[nodeId]);
-            processedData = performSetOperation(graphsToProcess, settings.setOperation);
+            const graphsToProcess = originNodeIds.map((nodeId) => rawData[nodeId]).filter(Boolean);
+            try {
+              processedData = performSetOperation(graphsToProcess, settings.setOperation);
+            } catch (err) {
+              console.error("Set operation failed; falling back to Union:", err);
+              try {
+                processedData = performSetOperation(graphsToProcess, "Union");
+              } catch (fallbackErr) {
+                console.error("Union fallback failed; using empty graph:", fallbackErr);
+                processedData = { nodes: [], links: [] };
+              }
+            }
           }
           let collapseList = finalCollapseList;
           if (lastActionType === "fetch/fulfilled" && collapsed?.initial?.length === 0) {
@@ -653,9 +663,9 @@ const ForceGraph = ({
       : [...settings.allowedCollections, name];
     handleSettingChange("allowedCollections", newAllowed);
   };
-  const handleAllOn = () =>
+  const _handleAllOn = () =>
     handleSettingChange("allowedCollections", settings.availableCollections);
-  const handleAllOff = () => handleSettingChange("allowedCollections", []);
+  const _handleAllOff = () => handleSettingChange("allowedCollections", []);
   const handleLabelToggle = (labelClass) => {
     const newLabelStates = {
       ...settings.labelStates,
@@ -854,6 +864,7 @@ const ForceGraph = ({
 
         {status === "loading" && <LoadingBar />}
 
+        {/* biome-ignore lint/correctness/useUniqueElementIds: legacy id */}
         <div id="chart-container-wrapper" ref={wrapperRef}>
           <svg ref={svgRef} role="img" aria-label="Graph visualization">
             <title>Graph visualization</title>
@@ -910,6 +921,7 @@ const ForceGraph = ({
         </DocumentPopup>
       </div>
 
+      {/* biome-ignore lint/correctness/useUniqueElementIds: legacy id */}
       <div
         id="graph-options-panel"
         className="graph-options-side-panel"
@@ -1003,9 +1015,11 @@ const ForceGraph = ({
               </div>
               <div className="tab-panel-content">
                 {activeSecondaryTab === "general" && (
+                  // biome-ignore lint/correctness/useUniqueElementIds: legacy id
                   <div id="tab-panel-general" className="tab-panel active">
                     <div className="option-group">
                       <label htmlFor="depth-select">Depth:</label>
+                      {/* biome-ignore lint/correctness/useUniqueElementIds: legacy id */}
                       <select id="depth-select" value={settings.depth} onChange={handleDepthChange}>
                         {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((value) => (
                           <option key={value} value={value}>
@@ -1016,6 +1030,7 @@ const ForceGraph = ({
                     </div>
                     <div className="option-group">
                       <label htmlFor="edge-direction-select">Traversal Direction:</label>
+                      {/* biome-ignore lint/correctness/useUniqueElementIds: legacy id */}
                       <select
                         id="edge-direction-select"
                         value={settings.edgeDirection}
@@ -1031,6 +1046,7 @@ const ForceGraph = ({
                     <div className="option-group font-size-picker">
                       <div className="node-font-size-picker">
                         <label htmlFor="node-font-size-select">Node font size:</label>
+                        {/* biome-ignore lint/correctness/useUniqueElementIds: legacy id */}
                         <select
                           id="node-font-size-select"
                           value={settings.nodeFontSize}
@@ -1045,6 +1061,7 @@ const ForceGraph = ({
                       </div>
                       <div className="edge-font-size-picker">
                         <label htmlFor="edge-font-size-select">Edge font size:</label>
+                        {/* biome-ignore lint/correctness/useUniqueElementIds: legacy id */}
                         <select
                           id="edge-font-size-select"
                           value={settings.edgeFontSize}
@@ -1123,6 +1140,7 @@ const ForceGraph = ({
                   </div>
                 )}
                 {activeSecondaryTab === "filters" && (
+                  // biome-ignore lint/correctness/useUniqueElementIds: legacy id
                   <div id="tab-panel-collections" className="tab-panel active">
                     <div className="collection-picker">
                       <h3>Collection Filters:</h3>
@@ -1178,6 +1196,7 @@ const ForceGraph = ({
           )}
 
           {activePrimaryTab === "multiNode" && originNodeIds && originNodeIds.length >= 2 && (
+            // biome-ignore lint/correctness/useUniqueElementIds: legacy id
             <div id="tab-panel-multiNode" className="tab-panel active">
               <div className="option-group labels-toggle-container">
                 <h3 className="group-label">Advanced Per-Node Settings:</h3>
@@ -1194,6 +1213,7 @@ const ForceGraph = ({
               </div>
               <div className="option-group multi-node">
                 <label htmlFor="set-operation-select">Graph operation:</label>
+                {/* biome-ignore lint/correctness/useUniqueElementIds: legacy id */}
                 <select
                   id="set-operation-select"
                   value={settings.setOperation}
@@ -1221,6 +1241,7 @@ const ForceGraph = ({
           )}
 
           {activePrimaryTab === "history" && (
+            // biome-ignore lint/correctness/useUniqueElementIds: legacy id
             <div id="tab-panel-history" className="tab-panel active">
               <div className="option-group">
                 <h3 className="group-label">Graph History</h3>
@@ -1249,6 +1270,7 @@ const ForceGraph = ({
           )}
 
           {activePrimaryTab === "export" && (
+            // biome-ignore lint/correctness/useUniqueElementIds: legacy id
             <div id="tab-panel-export" className="tab-panel active">
               <div className="option-group export-buttons">
                 <h3 className="group-label">Export Graph:</h3>

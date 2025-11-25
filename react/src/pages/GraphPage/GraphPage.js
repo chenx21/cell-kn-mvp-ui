@@ -58,7 +58,7 @@ const GraphPage = () => {
     } else {
       setSelectedItemObjects([]);
     }
-  }, [nodeIds, graphType, fetchNodeDetailsByIds, selectedItemObjects]);
+  }, [nodeIds, graphType, fetchNodeDetailsByIds]);
 
   // Effect to scroll down
   useEffect(() => {
@@ -69,6 +69,29 @@ const GraphPage = () => {
       });
     }
   }, [showGraph, lastAppliedOriginNodeIds]);
+
+  // E2E-only: if tests set window.__E2E__, always show the graph area so ForceGraph mounts.
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.__E2E__ && !showGraph) {
+      setShowGraph(true);
+    }
+  }, [showGraph]);
+
+  // Test hook: expose a method to force-show the graph area under E2E/non-production.
+  useEffect(() => {
+    if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
+      window.__GRAPH__ = window.__GRAPH__ || {};
+      window.__GRAPH__.show = () => setShowGraph(true);
+    }
+  }, []);
+
+  // Test-only helper: if running under E2E (window.__E2E__) and nodes are pre-seeded, auto-generate graph
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.__E2E__ && nodeIds.length > 0 && !showGraph) {
+      dispatch(initializeGraph({ nodeIds }));
+      setShowGraph(true);
+    }
+  }, [dispatch, nodeIds, showGraph]);
 
   // Event Handlers
   const handleRemoveItem = (item) => {

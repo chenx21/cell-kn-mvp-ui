@@ -4,13 +4,13 @@ import {
   PAUSE,
   PERSIST,
   PURGE,
-  REGISTER,
-  REHYDRATE,
   persistReducer,
   persistStore,
+  REGISTER,
+  REHYDRATE,
 } from "redux-persist";
 import storage from "redux-persist/lib/storage";
-import graphReducer from "./graphSlice";
+import graphReducer, { fetchAndProcessGraph } from "./graphSlice";
 import nodesSliceReducer from "./nodesSlice";
 import savedGraphsReducer from "./savedGraphsSlice";
 
@@ -50,3 +50,10 @@ export const store = configureStore({
 });
 
 export const persistor = persistStore(store);
+
+// Expose store for E2E/tests in non-production environments
+if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
+  window.__STORE__ = store;
+  window.__ACTIONS__ = window.__ACTIONS__ || {};
+  window.__ACTIONS__.fetchNow = () => store.dispatch(fetchAndProcessGraph());
+}
