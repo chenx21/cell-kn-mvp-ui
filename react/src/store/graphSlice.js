@@ -1,68 +1,26 @@
 import { createAsyncThunk, createSlice, current } from "@reduxjs/toolkit";
 import undoable from "redux-undo";
-import { performSetOperation } from "../components/ForceGraph/performSetOperation";
-import { getFilterableEdgeFields } from "../components/Utils/Utils";
-
-// API helper to fetch graph data from backend.
-// Handles three types of requests: standard traversal, shortest path, and advanced per-node settings.
-const fetchGraphDataAPI = async (params) => {
-  const {
-    nodeIds,
-    shortestPaths,
-    depth,
-    edgeDirection,
-    allowedCollections,
-    nodeLimit,
-    graphType,
-    edgeFilters,
-    advancedSettings,
-  } = params;
-
-  // Determine if this is a shortest path query.
-  const useShortestPath = shortestPaths && !advancedSettings && nodeIds.length > 1;
-
-  const endpoint = useShortestPath ? "/arango_api/shortest_paths/" : "/arango_api/graph/";
-
-  let body;
-
-  if (useShortestPath) {
-    // Body for a shortest path query.
-    body = {
-      node_ids: nodeIds,
-      edge_direction: edgeDirection,
-    };
-  } else if (advancedSettings) {
-    // Body for an advanced per-node settings query.
-    body = {
-      node_ids: nodeIds,
-      advanced_settings: advancedSettings,
-      graph: graphType,
-      include_inter_node_edges: params.includeInterNodeEdges ?? true,
-    };
-  } else {
-    // Body for a standard traversal query.
-    body = {
-      node_ids: nodeIds,
-      depth,
-      edge_direction: edgeDirection,
-      allowed_collections: allowedCollections,
-      node_limit: nodeLimit,
-      graph: graphType,
-      edge_filters: edgeFilters,
-      include_inter_node_edges: params.includeInterNodeEdges ?? true,
-    };
-  }
-
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) {
-    throw new Error(`Failed to fetch from ${endpoint}`);
-  }
-  return response.json();
-};
+import {
+  DEFAULT_COLLAPSE_ON_START,
+  DEFAULT_DEPTH,
+  DEFAULT_EDGE_DIRECTION,
+  DEFAULT_EDGE_FONT_SIZE,
+  DEFAULT_FIND_SHORTEST_PATHS,
+  DEFAULT_GRAPH_TYPE,
+  DEFAULT_INCLUDE_INTER_NODE_EDGES,
+  DEFAULT_LABEL_STATES,
+  DEFAULT_NODE_FONT_SIZE,
+  DEFAULT_NODE_LIMIT,
+  DEFAULT_SET_OPERATION,
+  DEFAULT_USE_FOCUS_NODES,
+  GRAPH_STATUS,
+} from "../constants";
+import {
+  fetchEdgeFilterOptions as fetchEdgeFilterOptionsAPI,
+  fetchGraphData,
+  fetchNodeExpansion,
+} from "../services";
+import { getFilterableEdgeFields, performSetOperation } from "../utils";
 
 // Async thunk for fetching graph data.
 export const fetchAndProcessGraph = createAsyncThunk(
@@ -96,7 +54,7 @@ export const fetchAndProcessGraph = createAsyncThunk(
     }
 
     try {
-      const rawData = await fetchGraphDataAPI(params);
+      const rawData = await fetchGraphData(params);
       return rawData;
     } catch (error) {
       console.error("Thunk fetch error:", error);
@@ -121,18 +79,7 @@ export const fetchEdgeFilterOptions = createAsyncThunk(
       return {}; // No fields to fetch.
     }
 
-    // Call backend API to get unique field values.
-    const response = await fetch("/arango_api/edge_filter_options/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fields: fieldsToQuery, graph: graphType }),
-    });
-
-    if (!response.ok) {
-      throw new Error("Edge filter options fetch failed.");
-    }
-
-    return await response.json();
+    return await fetchEdgeFilterOptionsAPI(fieldsToQuery, graphType);
   },
 );
 
@@ -142,21 +89,11 @@ export const expandNode = createAsyncThunk(
   "graph/expandNode",
   async (nodeIdToExpand, { getState }) => {
     const { settings } = getState().graph.present;
-    const response = await fetch("/arango_api/graph/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        node_ids: [nodeIdToExpand],
-        depth: 1,
-        edge_direction: "ANY",
-        allowed_collections: [],
-        graph: settings.graphType,
-        edge_filters: [],
-        include_inter_node_edges: settings.includeInterNodeEdges ?? true,
-      }),
-    });
-    if (!response.ok) throw new Error("Expansion fetch failed");
-    const expansionData = await response.json();
+    const expansionData = await fetchNodeExpansion(
+      nodeIdToExpand,
+      settings.graphType,
+      settings.includeInterNodeEdges ?? true,
+    );
     return {
       newNodes: expansionData?.[nodeIdToExpand].nodes || [],
       newLinks: expansionData?.[nodeIdToExpand].links || [],
@@ -169,26 +106,21 @@ export const expandNode = createAsyncThunk(
 const initialState = {
   // User-configurable settings for graph generation and appearance.
   settings: {
-    depth: 2,
-    edgeDirection: "ANY",
-    setOperation: "Union",
+    depth: DEFAULT_DEPTH,
+    edgeDirection: DEFAULT_EDGE_DIRECTION,
+    setOperation: DEFAULT_SET_OPERATION,
     allowedCollections: [], // Collections currently allowed in query
     availableCollections: [], // Collections currently in DB
     allCollections: [], // Collections in all DB
-    nodeFontSize: 12,
-    edgeFontSize: 8,
-    nodeLimit: 5000,
-    labelStates: {
-      "collection-label": false,
-      "link-source": false,
-      "link-label": true,
-      "node-label": true,
-    },
-    findShortestPaths: false,
-    useFocusNodes: true,
-    collapseOnStart: true,
-    graphType: "phenotypes",
-    includeInterNodeEdges: true, // Query for edges between result nodes
+    nodeFontSize: DEFAULT_NODE_FONT_SIZE,
+    edgeFontSize: DEFAULT_EDGE_FONT_SIZE,
+    nodeLimit: DEFAULT_NODE_LIMIT,
+    labelStates: { ...DEFAULT_LABEL_STATES },
+    findShortestPaths: DEFAULT_FIND_SHORTEST_PATHS,
+    useFocusNodes: DEFAULT_USE_FOCUS_NODES,
+    collapseOnStart: DEFAULT_COLLAPSE_ON_START,
+    graphType: DEFAULT_GRAPH_TYPE,
+    includeInterNodeEdges: DEFAULT_INCLUDE_INTER_NODE_EDGES,
     edgeFilters: getFilterableEdgeFields().reduce((acc, field) => {
       acc[field] = [];
       return acc;
@@ -214,17 +146,16 @@ const initialState = {
   },
   nodeToCenter: null, // ID of node to center view on after update.
   // Async operation status for UI feedback.
-  status: "idle", // (idle | loading | processing | succeeded | failed)
+  status: GRAPH_STATUS.IDLE,
   error: null,
   lastActionType: null, // Tracks last action for conditional logic in UI.
   availableEdgeFilters: {}, // Stores all unique edge attribute values fetched from API.
-  edgeFilterStatus: "idle", // Status for edge filter options fetch.
+  edgeFilterStatus: GRAPH_STATUS.IDLE, // Status for edge filter options fetch.
   // Flag indicating if advanced mode is active for the current query.
   isAdvancedMode: false,
   // Stores the settings for each origin node when in advanced mode.
   perNodeSettings: {},
 };
-
 // Redux slice for managing all graph-related state.
 const graphSlice = createSlice({
   name: "graph",
@@ -240,7 +171,7 @@ const graphSlice = createSlice({
     // Sets final, processed graph data, including node positions.
     setGraphData: (state, action) => {
       state.graphData = action.payload;
-      state.status = "succeeded";
+      state.status = GRAPH_STATUS.SUCCEEDED;
       state.lastActionType = "setGraphData";
     },
     // Resets graph state for new query.
@@ -254,7 +185,7 @@ const graphSlice = createSlice({
       state.perNodeSettings = perNodeSettings;
 
       // Reset graph data and status.
-      state.status = "idle";
+      state.status = GRAPH_STATUS.IDLE;
       state.lastActionType = "initializeGraph";
       state.rawData = {};
       state.graphData = { nodes: [], links: [] };
@@ -341,7 +272,7 @@ const graphSlice = createSlice({
       state.originNodeIds = originNodeIds;
       state.settings = settings;
       state.graphData = graphData;
-      state.status = "succeeded";
+      state.status = GRAPH_STATUS.SUCCEEDED;
       // Ensure lastAppliedSettings reflects the settings that produced this graph.
       try {
         state.lastAppliedSettings = JSON.parse(JSON.stringify(settings));
@@ -366,7 +297,7 @@ const graphSlice = createSlice({
       state.lastAppliedSettings = initialState.settings;
 
       // Set the state to signal a successful load.
-      state.status = "succeeded";
+      state.status = GRAPH_STATUS.SUCCEEDED;
       // lastAppliedSettings already set to initial defaults above, ensure deep clone
       try {
         state.lastAppliedSettings = JSON.parse(JSON.stringify(state.settings));
@@ -382,11 +313,11 @@ const graphSlice = createSlice({
     builder
       // Reducers for main graph fetch.
       .addCase(fetchAndProcessGraph.pending, (state) => {
-        state.status = "loading";
+        state.status = GRAPH_STATUS.LOADING;
         state.lastActionType = "fetch/pending";
       })
       .addCase(fetchAndProcessGraph.fulfilled, (state, action) => {
-        state.status = "processing";
+        state.status = GRAPH_STATUS.PROCESSING;
         // Store deep-cloned snapshots so later comparisons are by-value, not by reference.
         try {
           state.lastAppliedSettings = JSON.parse(JSON.stringify(state.settings));
@@ -410,16 +341,16 @@ const graphSlice = createSlice({
         state.lastActionType = "fetch/fulfilled";
       })
       .addCase(fetchAndProcessGraph.rejected, (state, action) => {
-        state.status = "failed";
+        state.status = GRAPH_STATUS.FAILED;
         state.error = action.error.message;
         state.lastActionType = "fetch/rejected";
       })
       // Reducers for edge filter options fetch.
       .addCase(fetchEdgeFilterOptions.pending, (state) => {
-        state.edgeFilterStatus = "loading";
+        state.edgeFilterStatus = GRAPH_STATUS.LOADING;
       })
       .addCase(fetchEdgeFilterOptions.fulfilled, (state, action) => {
-        state.edgeFilterStatus = "succeeded";
+        state.edgeFilterStatus = GRAPH_STATUS.SUCCEEDED;
         state.availableEdgeFilters = action.payload;
         // Initialize edgeFilters in settings with empty arrays for each new field.
         // Prevents undefined errors when accessing filters later.
@@ -430,7 +361,7 @@ const graphSlice = createSlice({
         }
       })
       .addCase(fetchEdgeFilterOptions.rejected, (state, action) => {
-        state.edgeFilterStatus = "failed";
+        state.edgeFilterStatus = GRAPH_STATUS.FAILED;
         state.error = action.error.message; // Store error for UI feedback.
         console.error("fetchEdgeFilterOptions rejected:", action.error.message);
       })
@@ -454,7 +385,7 @@ const graphSlice = createSlice({
       })
       .addCase(expandNode.rejected, (state, action) => {
         console.error("Expansion failed:", action.error.message);
-        state.status = "failed";
+        state.status = GRAPH_STATUS.FAILED;
         state.lastActionType = "expand/rejected";
       });
   },

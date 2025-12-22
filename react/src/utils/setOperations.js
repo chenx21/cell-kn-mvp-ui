@@ -1,9 +1,15 @@
 /**
- * Performs a set operation on an array of graph objects.
+ * Utility functions for performing set operations on graphs.
+ * These operations work on arrays of graph objects containing nodes and links.
+ */
+
+/**
+ * Performs set operations (union, intersection, symmetric difference)
+ * on multiple graph objects.
  *
- * @param {object[]} graphs - An array of graph objects, each with { nodes, links }.
- * @param {string} operation - The set operation: 'UNION', 'INTERSECTION', etc.
- * @returns {{nodes: object[], links: object[]}} - A single, combined graph object.
+ * @param {Array<{nodes: Array, links: Array}>} graphs - Array of graph objects
+ * @param {string} operation - The set operation: "Union", "Intersection", or "Symmetric Difference"
+ * @returns {{nodes: Array, links: Array}} - Result graph with combined/filtered nodes and links
  */
 export function performSetOperation(graphs, operation) {
   try {
@@ -49,6 +55,7 @@ export function performSetOperation(graphs, operation) {
         break;
       }
       default: {
+        // Union - include all unique nodes
         finalNodes = allEntries.map((e) => e.node);
         break;
       }
@@ -73,7 +80,7 @@ export function performSetOperation(graphs, operation) {
       }
     }
 
-    // Keep links whose endpoints are in final set
+    // Keep links whose endpoints are in final node set
     const filteredLinks = Array.from(uniqueLinks.values()).filter((link) => {
       const from = link?._from;
       const to = link?._to;

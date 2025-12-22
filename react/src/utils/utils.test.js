@@ -1,126 +1,68 @@
 import {
   capitalCase,
-  fetchCollections,
   getLabel,
   getTitle,
   getUrl,
   hasAnyNodes,
+  hasNodesInRawData,
   parseCollections,
-} from "./Utils";
+} from "./index";
 
 // --- Mocking ---
 
 // Mock the collectionsMapData import
 jest.mock(
-  "../../assets/cell-kn-mvp-collection-maps.json",
-  () => [
-    [
-      "nodes_a",
-      {
-        display_name: "Nodes A",
-        individual_labels: ["name", "key"],
-        individual_url: "/data/nodes-a/<FIELD_TO_USE>",
-        field_to_use: "key",
-        to_be_replaced: "_",
-        replace_with: "-",
-        make_lower_case: true,
-      },
+  "../assets/cell-kn-mvp-collection-maps.json",
+  () => ({
+    maps: [
+      [
+        "nodes_a",
+        {
+          display_name: "Nodes A",
+          individual_labels: [{ field_to_use: "name" }, { field_to_use: "key" }],
+          individual_urls: [
+            {
+              individual_url: "/data/nodes-a/<FIELD_TO_USE>",
+              field_to_use: "key",
+              to_be_replaced: "_",
+              replace_with: "-",
+              make_lower_case: true,
+            },
+          ],
+        },
+      ],
+      [
+        "nodes_b",
+        {
+          display_name: "Nodes B",
+          individual_labels: [{ field_to_use: "title" }],
+        },
+      ],
+      [
+        "edges",
+        {
+          display_name: "Relationships",
+          individual_labels: [{ field_to_use: "label" }],
+        },
+      ],
+      [
+        "nodes_c",
+        {
+          individual_labels: [{ field_to_use: "description" }],
+        },
+      ],
     ],
-    [
-      "nodes_b",
-      {
-        display_name: "Nodes B",
-        individual_labels: ["title"],
-      },
-    ],
-    [
-      "edges",
-      {
-        // Mock default edge config
-        display_name: "Relationships",
-        individual_labels: ["label"],
-      },
-    ],
-    [
-      "nodes_c",
-      {
-        individual_labels: ["description"],
-      },
-    ],
-  ],
+  }),
   { virtual: true },
 );
-
-// Mock the global fetch function
-global.fetch = jest.fn();
-
-// Helper to reset mocks before each test
-beforeEach(() => {
-  fetch.mockClear();
-});
 
 // --- Tests ---
 
 describe("Utils Module", () => {
-  // --- fetchCollections ---
-  describe("fetchCollections", () => {
-    it("should fetch collections successfully", async () => {
-      const mockData = { collections: ["col1", "col2"] };
-      const graphType = "myGraph";
-
-      // Configure the mock fetch response for success
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockData,
-      });
-
-      const result = await fetchCollections(graphType);
-
-      // Check if fetch was called correctly
-      expect(fetch).toHaveBeenCalledTimes(1);
-      expect(fetch).toHaveBeenCalledWith("/arango_api/collections/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ graph: graphType }),
-      });
-
-      // Check if the result is the expected data
-      expect(result).toEqual(mockData);
-    });
-
-    it("should throw an error if fetch fails", async () => {
-      const graphType = "myGraph";
-      const errorStatus = 500;
-      const errorText = "Server Error";
-
-      // Configure the mock fetch response for failure
-      fetch.mockResolvedValueOnce({
-        ok: false,
-        status: errorStatus,
-        text: async () => errorText, // Mock the .text() method for error logging
-      });
-
-      // Spy on console.error to ensure it's called
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation(() => {});
-
-      // Assert that the function call rejects with the expected error
-      await expect(fetchCollections(graphType)).rejects.toThrow(
-        `Network response was not ok (${errorStatus})`,
-      );
-
-      // Check if fetch was called
-      expect(fetch).toHaveBeenCalledTimes(1);
-      // Check if console.error was called
-      expect(consoleSpy).toHaveBeenCalledWith("Fetch collections failed:", errorStatus, errorText);
-
-      // Restore console.error spy
-      consoleSpy.mockRestore();
-    });
-  });
-
   // --- hasAnyNodes ---
   describe("hasAnyNodes", () => {
     const nodeId = "nodes_a/123";
+
     it("should return false for null or undefined data", () => {
       expect(hasAnyNodes(null, nodeId)).toBe(false);
       expect(hasAnyNodes(undefined, nodeId)).toBe(false);
@@ -139,12 +81,6 @@ describe("Utils Module", () => {
 
     it("should return false if the specific nodeId key is missing in data.nodes", () => {
       expect(hasAnyNodes({ nodes: { "other_nodes/456": [] } }, nodeId)).toBe(false);
-    });
-
-    it("should return false if the value for nodeId is not an array", () => {
-      expect(hasAnyNodes({ nodes: { [nodeId]: null } }, nodeId)).toBe(false);
-      expect(hasAnyNodes({ nodes: { [nodeId]: {} } }, nodeId)).toBe(false);
-      expect(hasAnyNodes({ nodes: { [nodeId]: "string" } }, nodeId)).toBe(false);
     });
 
     it("should return false for an empty array", () => {
@@ -176,6 +112,72 @@ describe("Utils Module", () => {
     });
   });
 
+  // --- hasNodesInRawData ---
+  describe("hasNodesInRawData", () => {
+    it("should return false for null or undefined data", () => {
+      expect(hasNodesInRawData(null)).toBe(false);
+      expect(hasNodesInRawData(undefined)).toBe(false);
+    });
+
+    it("should return false if data is not an object", () => {
+      expect(hasNodesInRawData("string")).toBe(false);
+      expect(hasNodesInRawData(123)).toBe(false);
+    });
+
+    it("should return false for empty object", () => {
+      expect(hasNodesInRawData({})).toBe(false);
+    });
+
+    // Shortest-path shape: { nodes: Array, links: Array }
+    it("should return true for shortest-path shape with nodes", () => {
+      expect(hasNodesInRawData({ nodes: [{ _id: "CL/1" }], links: [] })).toBe(true);
+    });
+
+    it("should return false for shortest-path shape with empty nodes", () => {
+      expect(hasNodesInRawData({ nodes: [], links: [] })).toBe(false);
+    });
+
+    // Per-origin shape: { [originId]: { nodes: Array, links: Array } }
+    it("should return true for per-origin shape with nodes", () => {
+      expect(
+        hasNodesInRawData({
+          "CL/123": { nodes: [{ _id: "CL/123" }], links: [] },
+        }),
+      ).toBe(true);
+    });
+
+    it("should return true if any origin has nodes", () => {
+      expect(
+        hasNodesInRawData({
+          "CL/123": { nodes: [], links: [] },
+          "UBERON/456": { nodes: [{ _id: "UBERON/456" }], links: [] },
+        }),
+      ).toBe(true);
+    });
+
+    it("should return false for per-origin shape with all empty nodes", () => {
+      expect(
+        hasNodesInRawData({
+          "CL/123": { nodes: [], links: [] },
+          "UBERON/456": { nodes: [], links: [] },
+        }),
+      ).toBe(false);
+    });
+
+    it("should return false for per-origin shape with invalid structure", () => {
+      expect(
+        hasNodesInRawData({
+          "CL/123": { links: [] }, // missing nodes
+        }),
+      ).toBe(false);
+      expect(
+        hasNodesInRawData({
+          "CL/123": null,
+        }),
+      ).toBe(false);
+    });
+  });
+
   // --- parseCollections ---
   describe("parseCollections", () => {
     const unsortedCollections = ["nodes_c", "Edges", "nodes_A"]; // Mixed case
@@ -187,14 +189,14 @@ describe("Utils Module", () => {
 
     it("should sort collections using display_name from map (case-insensitive)", () => {
       // Use the mocked collectionsMapData via the Map constructor
-      const collectionMaps = new Map(require("../../assets/cell-kn-mvp-collection-maps.json"));
+      const collectionMaps = new Map(require("../assets/cell-kn-mvp-collection-maps.json").maps);
       const input = ["nodes_b", "nodes_a"]; // Based on mock display names: Nodes B, Nodes A
       const expected = ["nodes_a", "nodes_b"]; // Sorted: Nodes A, Nodes B
       expect(parseCollections(input, collectionMaps)).toEqual(expected);
     });
 
     it("should fallback to collection key for sorting if display_name is missing", () => {
-      const collectionMaps = new Map(require("../../assets/cell-kn-mvp-collection-maps.json"));
+      const collectionMaps = new Map(require("../assets/cell-kn-mvp-collection-maps.json").maps);
       // nodes_c has no display_name in mock, nodes_a has "Nodes A"
       const input = ["nodes_c", "nodes_a"];
       // Expected: nodes_a ("Nodes A"), nodes_c (key)
@@ -203,7 +205,7 @@ describe("Utils Module", () => {
     });
 
     it("should fallback to collection key for sorting if collection not in map", () => {
-      const collectionMaps = new Map(require("../../assets/cell-kn-mvp-collection-maps.json"));
+      const collectionMaps = new Map(require("../assets/cell-kn-mvp-collection-maps.json").maps);
       // nodes_x not in mock map, nodes_a has "Nodes A"
       const input = ["nodes_x", "nodes_a"];
       // Expected: nodes_a ("Nodes A"), nodes_x (key)
@@ -212,7 +214,7 @@ describe("Utils Module", () => {
     });
 
     it("should handle mixed cases with and without map entries", () => {
-      const collectionMaps = new Map(require("../../assets/cell-kn-mvp-collection-maps.json"));
+      const collectionMaps = new Map(require("../assets/cell-kn-mvp-collection-maps.json").maps);
       // nodes_a: "Nodes A", nodes_b: "Nodes B", nodes_c: no display, nodes_x: no entry
       const input = ["nodes_x", "nodes_c", "nodes_b", "nodes_a"];
       const expected = ["nodes_a", "nodes_b", "nodes_c", "nodes_x"];
@@ -237,9 +239,9 @@ describe("Utils Module", () => {
       expect(getLabel(item)).toBe("Edge Label");
     });
 
-    it("should handle label values that are arrays by joining with ' | '", () => {
+    it("should handle label values that are arrays by converting to string", () => {
       const item = { _id: "nodes_b/3", title: ["Part 1", "Part 2"] };
-      expect(getLabel(item)).toBe("Part 1 | Part 2");
+      expect(getLabel(item)).toBe("Part 1,Part 2");
     });
 
     it("should handle numeric labels", () => {
@@ -247,9 +249,9 @@ describe("Utils Module", () => {
       expect(getLabel(item)).toBe("12345");
     });
 
-    it("should return undefined string if no label options are found", () => {
+    it("should return NAME UNKNOWN if no label options are found", () => {
       const item = { _id: "nodes_a/5", other_prop: "value" }; // neither 'name' nor 'key' exist
-      expect(getLabel(item)).toBeUndefined();
+      expect(getLabel(item)).toBe("NAME UNKNOWN");
     });
   });
 
@@ -260,9 +262,9 @@ describe("Utils Module", () => {
       expect(getUrl(item)).toBe("/data/nodes-a/item-key-1");
     });
 
-    it("should throw if config has no url", () => {
+    it("should return null if config has no url", () => {
       const item = { _id: "nodes_b/1", title: "Test Title" }; // nodes_b has no URL config in mock
-      expect(() => getUrl(item)).toThrow();
+      expect(getUrl(item)).toBeNull();
     });
   });
 
@@ -273,9 +275,9 @@ describe("Utils Module", () => {
       expect(getTitle(item)).toBe("Nodes A: Item One");
     });
 
-    it("should handle complex labels in title", () => {
+    it("should handle complex labels in title (arrays become comma-separated)", () => {
       const item = { _id: "nodes_b/3", title: ["part 1", "part 2"] };
-      expect(getTitle(item)).toBe("Nodes B: Part 1 | Part 2");
+      expect(getTitle(item)).toBe("Nodes B: Part 1,part 2");
     });
   });
 

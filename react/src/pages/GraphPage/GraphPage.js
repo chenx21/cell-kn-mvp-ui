@@ -1,12 +1,12 @@
+import ErrorBoundary from "components/ErrorBoundary";
+import ForceGraph from "components/ForceGraph/ForceGraph";
+import LoadGraphModal from "components/LoadGraphModal";
+import SelectedItemsTable from "components/SelectedItemsTable";
+import { GraphContext } from "contexts";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import ForceGraph from "../../components/ForceGraph/ForceGraph";
-import LoadGraphModal from "../../components/LoadGraphModal/LoadGraphModal";
-import SelectedItemsTable from "../../components/SelectedItemsTable/SelectedItemsTable";
-import { fetchNodeDetailsByIds } from "../../components/Utils/Utils";
-import { GraphContext } from "../../contexts/GraphContext";
-import { initializeGraph, loadGraphFromJson } from "../../store/graphSlice";
-import { removeNodeFromSlice } from "../../store/nodesSlice";
+import { fetchNodeDetailsByIds } from "services";
+import { initializeGraph, loadGraphFromJson, removeNodeFromSlice } from "store";
 
 const GraphPage = () => {
   const dispatch = useDispatch();
@@ -35,6 +35,7 @@ const GraphPage = () => {
   }, [dispatch]);
 
   // Effect to synchronize local objects with global node IDs.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: selectedItemObjects read for diff, nodeIds triggers effect
   useEffect(() => {
     const syncObjectsWithNodeIds = async () => {
       // Logic to prevent re-fetching objects already existing
@@ -58,7 +59,7 @@ const GraphPage = () => {
     } else {
       setSelectedItemObjects([]);
     }
-  }, [nodeIds, graphType, fetchNodeDetailsByIds]);
+  }, [nodeIds, graphType]);
 
   // Effect to scroll down
   useEffect(() => {
@@ -68,7 +69,7 @@ const GraphPage = () => {
         block: "start",
       });
     }
-  }, [showGraph, lastAppliedOriginNodeIds]);
+  }, [showGraph]);
 
   // E2E-only: if tests set window.__E2E__, always show the graph area so ForceGraph mounts.
   useEffect(() => {
@@ -113,7 +114,7 @@ const GraphPage = () => {
     // Init empty graph
     setIsLoadModalOpen(true);
     setShowGraph(true);
-  }, [dispatch]);
+  }, []);
 
   const handleLoadFromJson = () => {
     fileInputRef.current.click();
@@ -200,7 +201,9 @@ const GraphPage = () => {
       </div>
 
       <div className={!showGraph ? "hidden" : "graph-display-area"} ref={graphDisplayAreaRef}>
-        <ForceGraph />
+        <ErrorBoundary>
+          <ForceGraph />
+        </ErrorBoundary>
       </div>
       <LoadGraphModal isOpen={isLoadModalOpen} onClose={() => setIsLoadModalOpen(false)} />
     </div>

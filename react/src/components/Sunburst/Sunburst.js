@@ -1,8 +1,9 @@
+import AddToGraphButton from "components/AddToGraphButton";
+import DocumentPopup from "components/DocumentPopup";
+import SunburstConstructor from "components/SunburstConstructor";
 import { useCallback, useEffect, useRef, useState } from "react";
-import AddToGraphButton from "../AddToGraphButton/AddToGraphButton";
-import DocumentPopup from "../DocumentPopup/DocumentPopup";
-import SunburstConstructor from "../SunburstConstructor/SunburstConstructor";
-import { getLabel, LoadingBar, mergeChildren } from "../Utils/Utils";
+import { fetchHierarchyData } from "services";
+import { getLabel, LoadingBar, mergeChildren } from "utils";
 
 const Sunburst = ({ addSelectedItem }) => {
   // --- State ---
@@ -30,62 +31,49 @@ const Sunburst = ({ addSelectedItem }) => {
   const graphType = "phenotypes";
 
   // --- Data Fetching Logic ---
-  const fetchSunburstData = useCallback(
-    async (parentId = null, isInitialLoad = false) => {
-      if (!isInitialLoad && isLoadingRef.current) {
-        return;
-      }
-      setIsLoading(true);
-      isLoadingRef.current = true;
-      const fetchUrl = "/arango_api/sunburst/";
-      try {
-        const response = await fetch(fetchUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ parent_id: parentId, graph: graphType }),
+  const fetchSunburstData = useCallback(async (parentId = null, isInitialLoad = false) => {
+    if (!isInitialLoad && isLoadingRef.current) {
+      return;
+    }
+    setIsLoading(true);
+    isLoadingRef.current = true;
+    try {
+      const data = await fetchHierarchyData(parentId, graphType);
+      if (parentId) {
+        if (!Array.isArray(data)) throw new Error(`API error for parent ${parentId}`);
+        setGraphData((prevData) => {
+          if (!prevData) return null;
+          return mergeChildren(prevData, parentId, data);
         });
-        if (!response.ok) {
-          const err = await response.text();
-          throw new Error(`Fetch failed: ${response.status} ${err}`);
-        }
-        const data = await response.json();
-        if (parentId) {
-          if (!Array.isArray(data)) throw new Error(`API error for parent ${parentId}`);
-          setGraphData((prevData) => {
-            if (!prevData) return null;
-            return mergeChildren(prevData, parentId, data);
-          });
+      } else {
+        if (typeof data !== "object" || data === null || Array.isArray(data))
+          throw new Error("API error for initial load/root");
+        setGraphData(data);
+        if (graphType === "phenotypes") {
+          setZoomedNodeId("NCBITaxon/9606");
         } else {
-          if (typeof data !== "object" || data === null || Array.isArray(data))
-            throw new Error("API error for initial load/root");
-          setGraphData(data);
-          if (graphType === "phenotypes") {
-            setZoomedNodeId("NCBITaxon/9606");
-          } else {
-            setZoomedNodeId(null);
-          }
-          currentHierarchyRootRef.current = null; // Reset since data structure changed
+          setZoomedNodeId(null);
         }
-      } catch (error) {
-        console.error("Fetch/Process Error:", error);
-        setGraphData(null);
-        setZoomedNodeId(null);
-        currentHierarchyRootRef.current = null;
-      } finally {
-        setIsLoading(false);
-        isLoadingRef.current = false;
+        currentHierarchyRootRef.current = null; // Reset since data structure changed
       }
-    },
-    [graphType],
-  );
+    } catch (error) {
+      console.error("Fetch/Process Error:", error);
+      setGraphData(null);
+      setZoomedNodeId(null);
+      currentHierarchyRootRef.current = null;
+    } finally {
+      setIsLoading(false);
+      isLoadingRef.current = false;
+    }
+  }, []);
 
   useEffect(() => {
     isLoadingRef.current = isLoading;
   }, [isLoading]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional - only run on mount
   useEffect(() => {
     if (!graphData && !isLoadingRef.current) {
-      // ensure not to fetch if already loading
       fetchSunburstData(null, true);
     }
   }, []);
@@ -101,9 +89,9 @@ const Sunburst = ({ addSelectedItem }) => {
     setClickedItem(null);
     setPopupVisible(false);
     fetchSunburstData(null, false);
-  }, [graphType, fetchSunburstData]);
+  }, [fetchSunburstData]);
 
-  const checkNeedsLoad = (d) => {
+  const checkNeedsLoad = useCallback((d) => {
     if (!d) return false;
     let needsLoad = false;
     if (d.data._hasChildren) {
@@ -119,7 +107,7 @@ const Sunburst = ({ addSelectedItem }) => {
       }
     }
     return needsLoad;
-  };
+  }, []);
 
   // --- Event Handlers ---
   const latestHandleNodeClick = useCallback(
@@ -149,7 +137,7 @@ const Sunburst = ({ addSelectedItem }) => {
       }
       return false; // Default: do not animate
     },
-    [fetchSunburstData, zoomedNodeId],
+    [checkNeedsLoad, fetchSunburstData, zoomedNodeId],
   );
 
   const latestHandleCenterClick = useCallback(() => {
@@ -205,20 +193,17 @@ const Sunburst = ({ addSelectedItem }) => {
         d3ClickedRef.current(null, centeredNode);
       }
     }
-  }, [zoomedNodeId, fetchSunburstData]);
+  }, [checkNeedsLoad, zoomedNodeId, fetchSunburstData]);
 
-  const latestHandleSunburstClick = useCallback(
-    (e, dataNode) => {
-      // For right-click
-      setClickedItem(dataNode.data);
-      setPopupPosition({
-        x: e.clientX + 10 + window.scrollX,
-        y: e.clientY + 10 + window.scrollY,
-      });
-      setPopupVisible(true);
-    },
-    [zoomedNodeId],
-  );
+  const latestHandleSunburstClick = useCallback((e, dataNode) => {
+    // For right-click
+    setClickedItem(dataNode.data);
+    setPopupPosition({
+      x: e.clientX + 10 + window.scrollX,
+      y: e.clientY + 10 + window.scrollY,
+    });
+    setPopupVisible(true);
+  }, []);
 
   // useEffect to update the refs with the latest callback functions
   useEffect(() => {
@@ -278,6 +263,11 @@ const Sunburst = ({ addSelectedItem }) => {
   }, [graphData, zoomedNodeId]);
 
   // --- Popup Handling ---
+  const handlePopupClose = useCallback(() => {
+    setPopupVisible(false);
+    setClickedItem(null);
+  }, []);
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (popupRef.current && !popupRef.current.contains(event.target)) {
@@ -290,7 +280,7 @@ const Sunburst = ({ addSelectedItem }) => {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [popupVisible]);
+  }, [popupVisible, handlePopupClose]);
 
   function _handleSelectItem() {
     if (clickedItem) {
@@ -298,10 +288,6 @@ const Sunburst = ({ addSelectedItem }) => {
     }
     handlePopupClose();
   }
-  const handlePopupClose = () => {
-    setPopupVisible(false);
-    setClickedItem(null);
-  };
 
   // --- Render ---
   return (

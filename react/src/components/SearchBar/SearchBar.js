@@ -1,7 +1,8 @@
+import SearchResultsTable from "components/SearchResultsTable";
+import { GraphContext } from "contexts";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
-import { GraphContext } from "../../contexts/GraphContext";
-import SearchResultsTable from "../SearchResultsTable/SearchResultsTable";
-import { getAllSearchableFields } from "../Utils/Utils";
+import { searchDocuments } from "services";
+import { getAllSearchableFields } from "utils";
 
 // SVG Icon Component
 const SearchIcon = () => (
@@ -33,22 +34,7 @@ const SearchBar = () => {
   // Text search function
   const getSearchTerms = useCallback(async (currentSearchTerm, db) => {
     const searchableFields = getAllSearchableFields();
-    try {
-      const response = await fetch("/arango_api/search/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          search_term: currentSearchTerm,
-          db: db,
-          search_fields: Array.from(searchableFields),
-        }),
-      });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      return await response.json();
-    } catch (error) {
-      console.error("Error fetching search terms:", error);
-      return [];
-    }
+    return searchDocuments(currentSearchTerm, db, Array.from(searchableFields));
   }, []);
 
   // Effect for fetching search results

@@ -1,57 +1,82 @@
 import { render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
-import * as Utils from "../Utils/Utils";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import * as Services from "../../services";
+import * as Utils from "../../utils";
 import BrowseBox from "./BrowseBox";
 
-// Mocking the fetchCollections and parseCollections functions
-jest.mock("../Utils/Utils", () => ({
+// Mocking the services and utils
+jest.mock("../../services", () => ({
   fetchCollections: jest.fn(),
-  parseCollections: jest.fn(),
+  fetchCollectionDocuments: jest.fn(),
 }));
+
+jest.mock("../../utils", () => ({
+  parseCollections: jest.fn(),
+  getLabel: jest.fn((item) => item.label || item._id),
+}));
+
+// Helper to render with router at a specific collection path
+const renderAtPath = (path) => {
+  render(
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/collections/:coll" element={<BrowseBox />} />
+        <Route path="/collections" element={<BrowseBox />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+};
 
 describe("BrowseBox", () => {
   beforeEach(() => {
-    // Mock Utils
+    // Mock Services and Utils
     const mockFetchedData = ["Collection 1", "Collection 2", "Collection 3"];
-    Utils.fetchCollections.mockResolvedValue(mockFetchedData);
+    Services.fetchCollections.mockResolvedValue(mockFetchedData);
+    Services.fetchCollectionDocuments.mockResolvedValue([]);
     Utils.parseCollections.mockImplementation((data) => data);
-    // Render the BrowseBox with a Router wrapper and currentCollection prop
-
-    render(
-      <MemoryRouter>
-        <BrowseBox currentCollection="Collection 2" />
-      </MemoryRouter>,
-    );
   });
+
   it("should render collections", async () => {
+    renderAtPath("/collections/Collection 2");
+
     // Check collections are rendered
     await waitFor(() => {
-      expect(screen.getByText(/Collection 1/)).toBeInTheDocument();
-      expect(screen.getByText(/Collection 2/)).toBeInTheDocument();
-      expect(screen.getByText(/Collection 3/)).toBeInTheDocument();
+      expect(screen.getAllByText(/Collection 1/)[0]).toBeInTheDocument();
+      expect(screen.getAllByText(/Collection 2/)[0]).toBeInTheDocument();
+      expect(screen.getAllByText(/Collection 3/)[0]).toBeInTheDocument();
     });
   });
-  it("should highlight the active collection", async () => {
-    // Check appropriate collection is highlighted
+
+  it("should highlight the active collection based on URL param", async () => {
+    renderAtPath("/collections/Collection 2");
+
+    // Check appropriate collection is highlighted (based on URL param)
     await waitFor(() => {
-      expect(screen.getByText(/Collection 1/).closest("a")).not.toHaveClass("active");
-      expect(screen.getByText(/Collection 2/).closest("a")).toHaveClass("active");
-      expect(screen.getByText(/Collection 3/).closest("a")).not.toHaveClass("active");
+      const links = screen.getAllByRole("link");
+      const collection1Link = links.find((link) => link.textContent.includes("Collection 1"));
+      const collection2Link = links.find((link) => link.textContent.includes("Collection 2"));
+      const collection3Link = links.find((link) => link.textContent.includes("Collection 3"));
+
+      expect(collection1Link).not.toHaveClass("active");
+      expect(collection2Link).toHaveClass("active");
+      expect(collection3Link).not.toHaveClass("active");
     });
   });
 
   it("should render links to each collection with correct href", async () => {
+    renderAtPath("/collections/Collection 2");
+
     // Check hrefs are populated correctly
     await waitFor(() => {
-      expect(screen.getByText(/Collection 1/).closest("a")).toHaveAttribute(
+      expect(screen.getAllByText(/Collection 1/)[0].closest("a")).toHaveAttribute(
         "href",
         "/collections/Collection 1",
       );
-      expect(screen.getByText(/Collection 2/).closest("a")).toHaveAttribute(
+      expect(screen.getAllByText(/Collection 2/)[0].closest("a")).toHaveAttribute(
         "href",
         "/collections/Collection 2",
       );
-      expect(screen.getByText(/Collection 3/).closest("a")).toHaveAttribute(
+      expect(screen.getAllByText(/Collection 3/)[0].closest("a")).toHaveAttribute(
         "href",
         "/collections/Collection 3",
       );

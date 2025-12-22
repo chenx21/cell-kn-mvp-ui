@@ -3,11 +3,9 @@ import { Route, HashRouter as Router, Routes } from "react-router-dom";
 // Import consolidated stylesheet entry point so ordering stays consistent
 import "./styles/index.css";
 
-import { ActiveNavProvider } from "./components/ActiveNavContext/ActiveNavContext";
 import Footer from "./components/Footer/Footer";
 import Header from "./components/Header/Header";
-import { FtuPartsProvider } from "./contexts/FTUPartsContext";
-import { GraphProvider } from "./contexts/GraphContext";
+import { ActiveNavProvider, FtuPartsProvider, GraphProvider } from "./contexts";
 import AboutPage from "./pages/AboutPage/AboutPage";
 import CollectionsPage from "./pages/CollectionsPage/CollectionsPage";
 import DocumentPage from "./pages/DocumentPage/DocumentPage";

@@ -1,8 +1,9 @@
+import collMaps from "assets/cell-kn-mvp-collection-maps.json";
+import ListDocuments from "components/ListDocuments";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import collMaps from "../../assets/cell-kn-mvp-collection-maps.json";
-import ListDocuments from "../ListDocuments/ListDocuments";
-import { fetchCollections, getLabel, parseCollections } from "../Utils/Utils";
+import { fetchCollectionDocuments, fetchCollections } from "services";
+import { getLabel, parseCollections } from "utils";
 
 const collectionMaps = new Map(collMaps.maps);
 const ITEMS_PER_LOAD = 50;
@@ -24,7 +25,7 @@ const BrowseBox = () => {
     fetchCollections(graphType).then((data) => {
       setCollections(parseCollections(data, collectionMaps));
     });
-  }, [graphType]);
+  }, []);
 
   const sortDocumentList = useCallback((documents) => {
     const sortedList = Object.values(documents);
@@ -46,13 +47,7 @@ const BrowseBox = () => {
         return;
       }
       try {
-        const response = await fetch(`/arango_api/collection/${currentCollection}/`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ graph: graphType }),
-        });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const data = await response.json();
+        const data = await fetchCollectionDocuments(currentCollection, graphType);
         sortDocumentList(data);
       } catch (error) {
         console.error("Failed to fetch document list:", error);
@@ -66,7 +61,7 @@ const BrowseBox = () => {
       documentListScrollRef.current.scrollTop = 0;
     }
     fetchDocuments();
-  }, [currentCollection, graphType, sortDocumentList]);
+  }, [currentCollection, sortDocumentList]);
 
   const filteredDocuments = documentList.filter((doc) => {
     const searchLower = filterText.toLowerCase();

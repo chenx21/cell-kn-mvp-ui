@@ -1,14 +1,15 @@
-import { useContext, useEffect, useMemo, useState } from "react";
+import collectionDefaults from "assets/collection-defaults.json";
+import DocumentCard from "components/DocumentCard";
+import ForceGraph from "components/ForceGraph/ForceGraph";
+import FTUIllustration from "components/FTUIllustration";
+import { FTU_ILLUSTRATIONS_JSONLD_URL } from "constants/index";
+import { useFtuParts } from "contexts";
+import { useEffect, useMemo, useState } from "react";
 import { useDispatch } from "react-redux";
 import { useParams } from "react-router-dom";
-import collectionDefaults from "../../assets/collection-defaults.json";
-import DocumentCard from "../../components/DocumentCard/DocumentCard";
-import ForceGraph from "../../components/ForceGraph/ForceGraph";
-import FTUIllustration from "../../components/FTUIllustration/FTUIllustration";
-import { findFtuUrlById, getTitle, parseId } from "../../components/Utils/Utils";
-import { useFtuParts } from "../../contexts/FTUPartsContext";
-import { PrunedCollectionsContext } from "../../contexts/PrunedCollectionsContext";
-import { initializeGraph } from "../../store/graphSlice";
+import { fetchDocument } from "services";
+import { initializeGraph } from "store";
+import { findFtuUrlById, getTitle, parseId } from "utils";
 
 const DocumentPage = () => {
   const dispatch = useDispatch();
@@ -17,36 +18,26 @@ const DocumentPage = () => {
   const [nodeIds, setNodeIds] = useState(null);
   const [isPanelVisible, setIsPanelVisible] = useState(true);
 
-  const prunedCollections = useContext(PrunedCollectionsContext);
   const { ftuParts } = useFtuParts();
 
-  const filteredPrunedCollections = prunedCollections.includes(coll)
-    ? prunedCollections.filter((item) => item !== coll)
-    : prunedCollections;
-
   useEffect(() => {
-    const getDocument = async () => {
+    const getDocumentData = async () => {
       try {
-        const response = await fetch(`/arango_api/collection/${coll}/${id}/`);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
+        const data = await fetchDocument(coll, id);
         setDocument(data);
         setNodeIds(parseId(data));
         dispatch(initializeGraph({ nodeIds: parseId(data) }));
       } catch (error) {
         console.error("Failed to fetch document:", error);
-
         setDocument(null);
       }
     };
 
     if (id && coll) {
       setDocument(null);
-      getDocument();
+      getDocumentData();
     }
-  }, [id, coll]);
+  }, [id, coll, dispatch]);
 
   const ftuIllustrationUrl = useMemo(() => {
     if (!document || !ftuParts || ftuParts.length === 0) {
@@ -54,24 +45,22 @@ const DocumentPage = () => {
     }
     const ftuUrl = findFtuUrlById(ftuParts, `${coll}_${id}`);
     return ftuUrl;
-  }, [document, ftuParts, id]);
+  }, [document, ftuParts, id, coll]);
 
   const forceGraphSettings = useMemo(() => {
-    const defaultsForCollection = collectionDefaults[coll] || {};
+    // Use collection-specific defaults, falling back to _defaults for unknown collections
+    const collectionConfig = collectionDefaults[coll] || collectionDefaults._defaults || {};
 
-    // Start with per-collection JSON defaults (graphType, depth, edgeDirection, collapseOnStart, allowedCollections, preferredPredicates)
-    const base = { ...defaultsForCollection };
+    // Start with the resolved defaults
+    const base = { ...collectionConfig };
 
-    // Preserve existing prune behavior as an alternative when explicit allowedCollections not set
-    base.collectionsToPrune = filteredPrunedCollections;
-
-    // If multiple origin nodes, prefer shallower depth unless explicitly set to 0/1 in defaults
+    // If multiple origin nodes, prefer shallower depth unless explicitly set in defaults
     if (nodeIds && nodeIds.length > 1 && typeof base.depth !== "number") {
       base.depth = 0;
     }
 
     return base;
-  }, [coll, filteredPrunedCollections, nodeIds]);
+  }, [coll, nodeIds]);
 
   const isLoading = !document && id && coll;
 
@@ -116,9 +105,7 @@ const DocumentPage = () => {
             {ftuIllustrationUrl && (
               <FTUIllustration
                 selectedIllustration={ftuIllustrationUrl}
-                illustrations={
-                  "https://cdn.humanatlas.io/digital-objects/graph/2d-ftu-illustrations/latest/assets/2d-ftu-illustrations.jsonld"
-                }
+                illustrations={FTU_ILLUSTRATIONS_JSONLD_URL}
               />
             )}
           </div>
