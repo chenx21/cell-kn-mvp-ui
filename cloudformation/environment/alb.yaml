@@ -9,7 +9,7 @@ Parameters:
 
   Environment:
     Type: String
-    Default: dev
+    Default: sandbox
     Description: Environment name (dev, sandbox, prod)
     AllowedValues:
       - dev
@@ -17,24 +17,24 @@ Parameters:
       - prod
 
   VpcId:
-    Type: AWS::EC2::VPC::Id
+    Type: String
     Description: VPC ID (NIH-provided)
+    Default: 'vpc-0ee6b25a12c642104'
 
   PublicSubnetIds:
-    Type: List<AWS::EC2::Subnet::Id>
+    Type: CommaDelimitedList
     Description: Public subnet IDs for ALB (NIH-provided)
+    Default: 'subnet-0f3493e28d597c47f,subnet-0713e6a5c5972fc4b,subnet-0d06c1e919d8a6a0f'
 
   AlbSecurityGroupId:
     Type: String
     Description: Security group ID for ALB
+    Default: 'sg-06415d49b7c8a689c'
 
-  DomainName:
+  AlbCertificate:
     Type: String
-    Description: Base domain name (e.g., cell-kn-mvp.org)
-
-  HostedZoneId:
-    Type: String
-    Description: Route 53 hosted zone ID for DNS validation of the ALB ACM certificate
+    Description: ACM certificate ARN for the ALB (must be in us-east-1 to work with CloudFront)
+    Default: 'arn:aws:acm:us-east-1:206537881715:certificate/6efad63b-eb24-4a83-b781-61ad32b31003'
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -50,13 +50,6 @@ Metadata:
           - VpcId
           - PublicSubnetIds
           - AlbSecurityGroupId
-      - Label:
-          default: Domain Configuration
-        Parameters:
-          - DomainName
-          - HostedZoneId
-Conditions:
-  IsProd: !Equals [!Ref Environment, 'prod']
 
 Resources:
   # ============================================================================
@@ -66,37 +59,31 @@ Resources:
   # and by CloudFront (passed as a parameter to frontend.yaml).
   # When the ALB is in us-east-1, this cert satisfies both requirements.
   # ============================================================================
-  AlbCertificate:
-    Type: AWS::CertificateManager::Certificate
-    Properties:
-      DomainName: !If
-        - IsProd
-        - !Ref DomainName
-        - !Sub '${Environment}.${DomainName}'
-      ValidationMethod: DNS
-      DomainValidationOptions:
-        - DomainName: !If
-            - IsProd
-            - !Ref DomainName
-            - !Sub '${Environment}.${DomainName}'
-          HostedZoneId: !Ref HostedZoneId
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-alb-cert'
-        - Key: ManagedBy
-          Value: CloudFormation
+  #AlbCertificate:
+  #  Type: AWS::CertificateManager::Certificate
+  #  Properties:
+  #    DomainName:  !Sub '${DomainName}'
+  #    ValidationMethod: DNS
+  #    DomainValidationOptions:
+  #      - DomainName: !Sub '${DomainName}'
+  #        HostedZoneId: !Ref HostedZoneId
+  #    Tags:
+  #      - Key: Project
+  #        Value: !Ref ProjectName
+  #      - Key: Environment
+  #        Value: !Ref Environment
+  #      - Key: Name
+  #        Value: !Sub '${ProjectName}-${Environment}-alb-cert'
+  #      - Key: ManagedBy
+  #        Value: CloudFormation
 
   # ============================================================================
   # S3 Bucket for ALB Access Logs
   # ============================================================================
   AlbLogsBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: !If [IsProd, Retain, Delete]
-    UpdateReplacePolicy: !If [IsProd, Retain, Delete]
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       BucketName: !Sub '${ProjectName}-${Environment}-alb-logs-${AWS::AccountId}'
       PublicAccessBlockConfiguration:
@@ -315,12 +302,6 @@ Resources:
           TargetGroupArn: !Ref ArangoDbTargetGroup
 
 Outputs:
-  CertificateArn:
-    Description: ACM certificate ARN (shared with CloudFront via frontend.yaml)
-    Value: !Ref AlbCertificate
-    Export:
-      Name: !Sub '${ProjectName}-${Environment}-acm-cert-arn'
-
   LoadBalancerArn:
     Description: ALB ARN
     Value: !Ref ApplicationLoadBalancer
