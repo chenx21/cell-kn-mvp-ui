@@ -1,0 +1,102 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ECS Backend IAM role and policies for CELL-KN tasks template.'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: cell-kn
+    Description: Project name for resource naming
+
+  Environment:
+    Type: String
+    Default: sandbox
+    Description: Environment name (dev, sandbox, prod)
+    AllowedValues:
+      - dev
+      - sandbox
+      - prod
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Project Configuration
+        Parameters:
+          - ProjectName
+          - Environment
+
+Conditions:
+  IsDev: !Equals [!Ref Environment, 'sandbox']
+
+Resources:
+  # ============================================================================
+  # IAM Roles for backend ECS  Tasks.
+  # ============================================================================
+BackendSvcRole:
+  Type: AWS::IAM::Role
+  Condition: IsDev
+  Properties:
+    RoleName: !Sub '${ProjectName}-${Environment}-ecs-backend-svc'
+    AssumeRolePolicyDocument:
+      Version: '2012-10-17'
+      Statement:
+        - Effect: Allow
+          Principal:
+            Service: ecs-tasks.amazonaws.com
+          Action: sts:AssumeRole
+    ManagedPolicyArns:
+      - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AwsECSBackendTaskExecutionRolePolicy'
+    Policies:
+      - PolicyName: SSMAccess
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ssm:GetParameters
+                - ssm:GetParameter
+              Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/${Environment}/*'
+      - PolicyName: SecretsManagerAccess
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Sub 'arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/${ProjectName}/${Environment}/secrets/*'
+      - PolicyName: ServiceDiscoveryAccess
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - servicediscovery:RegisterInstance
+                - servicediscovery:DeregisterInstance
+                - servicediscovery:GetOperation
+              Resource: '*'
+      - PolicyName: CloudWatchLogsAccess
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+                - logs:DescribeLogStreams
+              Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/ecs/${ProjectName}-${Environment}-backend:*'
+    Tags:
+      - Key: Project
+        Value: !Ref ProjectName
+      - Key: Environment
+        Value: !Ref Environment
+      - Key: Name
+        Value: !Sub '${ProjectName}-${Environment}-backend-svc-role'
+      - Key: ManagedBy
+        Value: CloudFormation
+
+Outputs:
+    BackendSvcRoleArn:
+        Description: ARN of the IAM role for backend ECS tasks
+        Value: !GetAtt BackendSvcRole.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-backend-instance-role-arn'
