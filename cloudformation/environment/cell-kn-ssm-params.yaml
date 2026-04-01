@@ -27,7 +27,7 @@ Parameters:
   pDatasetVersion:
       Description: "Dataset version parameter - managed out-of-band by deploy-dataset.sh. Always set to 'none' here so CloudFormation never overwrites a live value. The deploy-dataset.sh script will update this parameter to the correct version after deployment."
       Type: String
-      Default: "null"
+      Default: "none"
   pNessusGroupName:
       Description: Nessus Group name to be used for the App server
       Type: String
@@ -44,15 +44,22 @@ Parameters:
       Description: Max App server size to be used for the App server ASG
       Type: String
       Default: 2
-  pLocalRolesVersion:
+  pArangodbBucketName:
       Description: Ancible version used by application
       Type: String
-      Default: 0.5
+      Default: "cell-kn-arangodb-data-206537881715"
   pSecretArn:
       Description: Secret manager RDS DB arn for application
       Type: String
       Default: "arn:aws:secretsmanager:us-east-1:070163433501:secret:/dbsecrets/rxnprod2020aav2_prod@rxnorm-db-prod-TjJJK2"
 Resources:
+  rArangodbBucketName:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: !Sub /${pSSMAppsRootPath}/${pAppNameLC}/arango/pArangodbBucketName
+      Type: "String"
+      Value: !Sub ${pArangodbBucketName}
+      Description: "Dataset version parameter "
   rDBUserID:
     Type: "AWS::SSM::Parameter"
     Properties:
