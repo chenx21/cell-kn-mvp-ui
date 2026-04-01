@@ -8,7 +8,7 @@ Resources:
   DBLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/arango/instance/sunsetting-db-sbox/arangodb'
+      LogGroupName: !Sub '/aws/arango/instance/cell-kn-db-sbox/arangodb'
       RetentionInDays: 30
   # ============================================================================
   # EC2 CloudWatch Log Group
