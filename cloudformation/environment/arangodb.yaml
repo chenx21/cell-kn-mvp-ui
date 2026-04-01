@@ -2,30 +2,48 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'ArangoDB on EC2 with EBS persistence and S3 restore capability'
 
 Parameters:
+  pAWSAccount:
+     Description: 'Account (NLM-PROD, NLM-QA, NLM-INT, NLM-SEC)'
+     Type: String
+     Default: "NLM-SBOX"
+
+  pVPCName:
+    Type: String
+    Default: "vpc-101"
+    Description: Project name for resource naming
+
+  pAppName:
+    Type: String
+    Default: "CELL-KN"
+    Description: Project name for resource naming
+
+  pAppNameLC:
+    Type: String
+    Default: "cell-kn"
+    Description: Project name for resource naming
+
   ProjectName:
     Type: String
-    Default: cell-kn
+    Default: "cell-kn"
     Description: Project name for resource naming
 
   Environment:
     Type: String
-    Default: dev
+    Default: "dev"
     Description: Environment name (dev, sandbox, prod)
     AllowedValues:
       - dev
       - sandbox
       - prod
 
-  # Security group ID cannot use Fn::ImportValue inside Fn::If, so it is
-  # passed as a parameter. deploy-environment.sh resolves it from either the
-  # infra stack exports (dev) or SSM prereqs (sandbox/prod).
-  ArangoDbSecurityGroupId:
+  LogGroup:
     Type: String
-    Description: Security group ID for ArangoDB EC2 instance
+    Description: CloudWatch Logs group name for ArangoDB logs
+    Default: "/aws/arango/instance/sunsetting-db-sbox/arangodb"
 
   ArangoDbUser:
     Type: String
-    Default: root
+    Default: "root"
     Description: ArangoDB root username
 
   # EC2 instance type. t4g (Graviton2/ARM64) is ~20% cheaper than equivalent
@@ -33,7 +51,7 @@ Parameters:
   # t4g.medium: 2 vCPU / 4 GB RAM — recommended for ArangoDB with a modest dataset.
   InstanceType:
     Type: String
-    Default: t4g.medium
+    Default: "t3.medium"
     AllowedValues:
       - t4g.small
       - t4g.medium
@@ -55,7 +73,7 @@ Parameters:
   # In sandbox/prod this must be a pre-created ARN passed in from deploy script.
   InstanceProfileArn:
     Type: String
-    Default: ''
+    Default: 'arn:aws:iam::206537881715:instance-profile/cell-kn-sandbox-arangodb-ec2'
     Description: >
       Pre-existing IAM instance profile ARN (sandbox/prod only).
       Leave empty in dev - the profile will be created by this template.
@@ -68,14 +86,6 @@ Metadata:
         Parameters:
           - ProjectName
           - Environment
-      - Label:
-          default: Network Configuration
-        Parameters:
-          - ArangoDbSecurityGroupId
-      - Label:
-          default: ArangoDB Configuration
-        Parameters:
-          - ArangoDbUser
       - Label:
           default: EC2 / Storage Configuration
         Parameters:
@@ -90,155 +100,6 @@ Conditions:
   IsDev: !Equals [!Ref Environment, 'dev']
 
 Resources:
-  # ============================================================================
-  # SSM Parameters for ArangoDB Credentials
-  # ============================================================================
-  ArangoDbUserParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: !Sub '/${ProjectName}/${Environment}/arango/db-user'
-      Type: String
-      Value: !Ref ArangoDbUser
-      Description: ArangoDB username
-      Tags:
-        Project: !Ref ProjectName
-        Environment: !Ref Environment
-        Name: !Sub '${ProjectName}-${Environment}-arango-user'
-        ManagedBy: CloudFormation
-
-  # Dataset version parameter - managed out-of-band by deploy-dataset.sh.
-  # Always set to 'none' here so CloudFormation never overwrites a live value
-  # on subsequent stack updates, preventing unintended dataset restores.
-  DatasetVersionParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: !Sub '/${ProjectName}/${Environment}/arango/dataset-version'
-      Type: String
-      Value: 'none'
-      Description: Current dataset version (S3 key) - updated by deploy-dataset.sh, not CloudFormation
-      Tags:
-        Project: !Ref ProjectName
-        Environment: !Ref Environment
-        Name: !Sub '${ProjectName}-${Environment}-dataset-version'
-        ManagedBy: CloudFormation
-
-  # ============================================================================
-  # CloudWatch Log Group
-  # ============================================================================
-  LogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/ec2/${ProjectName}-${Environment}-arangodb'
-      RetentionInDays: 7
-
-  # ============================================================================
-  # IAM Role + Instance Profile (dev only)
-  # In sandbox/prod these are pre-created and passed in as InstanceProfileArn.
-  # ============================================================================
-  InstanceRole:
-    Type: AWS::IAM::Role
-    Condition: IsDev
-    Properties:
-      RoleName: !Sub '${ProjectName}-${Environment}-arangodb-ec2'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        # SSM Session Manager access (replaces SSH)
-        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore'
-        # CloudWatch agent
-        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/CloudWatchAgentServerPolicy'
-      Policies:
-        - PolicyName: S3Access
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:ListBucket
-                  - s3:PutObject
-                Resource:
-                  - !Sub 'arn:${AWS::Partition}:s3:::${ProjectName}-arangodb-data-*'
-                  - !Sub 'arn:${AWS::Partition}:s3:::${ProjectName}-arangodb-data-*/*'
-        - PolicyName: SSMParameterAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - ssm:GetParameter
-                  - ssm:GetParameters
-                Resource:
-                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/${Environment}/arango/*'
-                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/shared/arangodb-bucket-name'
-        - PolicyName: SecretsManagerAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - secretsmanager:GetSecretValue
-                Resource: !Sub 'arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/${ProjectName}/${Environment}/secrets/*'
-        - PolicyName: CloudWatchLogsAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                  - logs:DescribeLogStreams
-                Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/ec2/${ProjectName}-${Environment}-arangodb:*'
-        - PolicyName: ServiceDiscoveryAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - servicediscovery:RegisterInstance
-                  - servicediscovery:DeregisterInstance
-                  - servicediscovery:GetOperation
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - route53:ChangeResourceRecordSets
-                  - route53:CreateHealthCheck
-                  - route53:DeleteHealthCheck
-                  - route53:UpdateHealthCheck
-                Resource: '*'
-        - PolicyName: AlbTargetRegistration
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - elasticloadbalancing:RegisterTargets
-                  - elasticloadbalancing:DescribeTargetGroups
-                  - cloudformation:ListExports
-                Resource: '*'
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-arangodb-ec2-role'
-        - Key: ManagedBy
-          Value: CloudFormation
-
-  InstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Condition: IsDev
-    Properties:
-      InstanceProfileName: !Sub '${ProjectName}-${Environment}-arangodb-ec2'
-      Roles:
-        - !Ref InstanceRole
-
   # ============================================================================
   # Cloud Map Service for Service Discovery
   # EC2 instance self-registers via UserData using the AWS CLI.
@@ -273,30 +134,33 @@ Resources:
   ArangoDbInstance:
     Type: AWS::EC2::Instance
     DependsOn:
-      - ArangoDbUserParameter
-      - DatasetVersionParameter
-      - LogGroup
       - ServiceDiscoveryService
-    CreationPolicy:
-      ResourceSignal:
-        Timeout: PT20M
+   #CreationPolicy:
+      #ResourceSignal:
+        #Timeout: PT30M
     Properties:
       # arm64 AMI — matches t4g (Graviton2) instance family.
       # If switching back to t3/x86, change to: al2023-ami-kernel-default-x86_64
-      ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64}}'
+      #ImageId: ami-0b7590cd0375fb3d8
+      ImageId: ami-0419af41559343838
       InstanceType: !Ref InstanceType
-      SubnetId: subnet-0031722a
-      SecurityGroupIds:
-        - !Ref ArangoDbSecurityGroupId
+      KeyName: chenx21-piv
+      SubnetId:  subnet-0a0aacec5e8ceefcd
+      SecurityGroupIds: [
+        "sg-0b819f618599f1f07",
+        "sg-0b0663822cede0ec3"
+      ]
       IamInstanceProfile: !If
         - IsDev
-        - !Ref InstanceProfile
+        #- Ref InstanceProfileName
+        - cell-kn-sandbox-arangodb-ec2
         - !Ref InstanceProfileArn
+        #- arn:aws:iam::206537881715:instance-profile/cell-kn-sandbox-arangodb-ec2
       BlockDeviceMappings:
         # Root volume — OS only
         - DeviceName: /dev/xvda
           Ebs:
-            VolumeSize: 20
+            VolumeSize: 25
             VolumeType: gp3
             DeleteOnTermination: true
             Encrypted: true
@@ -308,21 +172,25 @@ Resources:
             DeleteOnTermination: false
             Encrypted: true
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64:  !Sub |
           #!/bin/bash
+          exec > >(tee /var/log/arangodb-setup.log | logger -t arangodb-setup) 2>&1
           set -euxo pipefail
-
-          PROJECT_NAME="${ProjectName}"
-          ENVIRONMENT="${Environment}"
-          REGION="${AWS::Region}"
-          ACCOUNT_ID="${AWS::AccountId}"
-          LOG_GROUP="/ec2/${ProjectName}-${Environment}-arangodb"
+          
+          PROJECT_NAME="cell-kn"
+          ENVIRONMENT="dev"
+          REGION="us-east-1"
+          ACCOUNT_ID="206537881715"
+          LOG_GROUP="/aws/arango/instance/cell-kn-db-sbox/arangodb"
           SD_SERVICE_ID="${ServiceDiscoveryService}"
-
+          
           # ── 1. System setup ──────────────────────────────────────────────────
-          yum update -y
-          yum install -y docker aws-cli
-
+          #yum update -y
+          #yum install -y docker aws-cli
+          systemctl stop firewalld
+          systemctl disable firewalld 
+          
+          sudo systemctl restart amazon-ssm-agent
           # CloudWatch agent
           yum install -y amazon-cloudwatch-agent
           cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'CWAGENT'
@@ -351,17 +219,17 @@ Resources:
           CWAGENT
           systemctl enable amazon-cloudwatch-agent
           systemctl start amazon-cloudwatch-agent
-
+          
           exec > >(tee /var/log/arangodb-setup.log | logger -t arangodb-setup) 2>&1
           echo "==> Starting ArangoDB setup $(date)"
-
+          
           # ── 2. Mount EBS data volume ─────────────────────────────────────────
           DATA_DEVICE=/dev/xvdb
           DATA_DIR=/var/lib/arangodb3
           APPS_DIR=/var/lib/arangodb3-apps
-
+          
           mkdir -p "$DATA_DIR" "$APPS_DIR"
-
+          
           # Only format if the device has no filesystem yet (preserves data on restart)
           if ! blkid "$DATA_DEVICE" | grep -q TYPE; then
             echo "==> Formatting data volume..."
@@ -369,37 +237,39 @@ Resources:
           else
             echo "==> Data volume already formatted, skipping mkfs"
           fi
-
+          
           # Mount (idempotent via fstab)
           if ! grep -q "$DATA_DEVICE" /etc/fstab; then
             echo "$DATA_DEVICE $DATA_DIR xfs defaults,nofail 0 2" >> /etc/fstab
           fi
           mount -a
           echo "==> Data volume mounted at $DATA_DIR"
-
+          
           # Set ownership to ArangoDB uid/gid (1000:1000 in official Docker image)
           chown -R 1000:1000 "$DATA_DIR" "$APPS_DIR"
-
+          
           # ── 3. S3 restore (same logic as former init container) ──────────────
           echo "==> S3 Restore check"
-
+          
           ARANGODB_S3_BUCKET=$(aws ssm get-parameter \
-            --name "/$PROJECT_NAME/shared/arangodb-bucket-name" \
+            --name "/platform/$PROJECT_NAME/arango/pArangodbBucketName" \
             --query 'Parameter.Value' \
             --output text \
             --region "$REGION")
+          #ARANGODB_S3_BUCKET="nlm-sbox-alb-logs-us-east-1-bucket"
           echo "Dataset bucket: $ARANGODB_S3_BUCKET"
-
+          
           CURRENT_VERSION=$(aws ssm get-parameter \
-            --name "/$PROJECT_NAME/$ENVIRONMENT/arango/dataset-version" \
+            --name "/platform/$PROJECT_NAME/arango/pDatasetVersion" \
             --query 'Parameter.Value' \
             --output text \
-            --region "$REGION")
+            --region "$REGION" \
+            || echo "none")
           echo "Current dataset version: $CURRENT_VERSION"
-
+          
           LAST_RESTORED=$(cat "$DATA_DIR/.dataset-version" 2>/dev/null || echo "none")
           echo "Last restored version: $LAST_RESTORED"
-
+          
           if [ "$CURRENT_VERSION" = "$LAST_RESTORED" ]; then
             echo "Already on version $CURRENT_VERSION, skipping restore"
           elif [ "$CURRENT_VERSION" = "none" ] || [ -z "$CURRENT_VERSION" ]; then
@@ -409,10 +279,10 @@ Resources:
             echo "Clearing old data..."
             rm -rf "$DATA_DIR"/*
             rm -rf "$APPS_DIR"/*
-
+          
             echo "Downloading s3://$ARANGODB_S3_BUCKET/$CURRENT_VERSION"
             aws s3 cp "s3://$ARANGODB_S3_BUCKET/$CURRENT_VERSION" /tmp/restore.tar.gz
-
+          
             echo "Extracting backup..."
             # Auto-detect tar structure: some archives use var/lib/arangodb3/...
             # (created with -C /), others use arangodb/... (created with -C /var/lib).
@@ -425,30 +295,31 @@ Resources:
               tar -xzf /tmp/restore.tar.gz -C "$DATA_DIR" --strip-components=1
             fi
             rm -f /tmp/restore.tar.gz
-
+          
             # Restore ownership after extraction
             chown -R 1000:1000 "$DATA_DIR" "$APPS_DIR"
-
+          
             echo "$CURRENT_VERSION" > "$DATA_DIR/.dataset-version"
             echo "Restore completed successfully"
           fi
-
+          
           # ── 4. Run ArangoDB via Docker ───────────────────────────────────────
           systemctl enable docker
           systemctl start docker
-
-          ARANGO_PASSWORD=$(aws secretsmanager get-secret-value \
-            --secret-id "/$PROJECT_NAME/$ENVIRONMENT/secrets/arangodb-password" \
-            --query 'SecretString' \
-            --output text \
-            --region "$REGION")
-
+          
+          ARANGO_PASSWORD="Svl6XSl25GDYYuGuW7UmGJ8kVvUvMhxMpa7sHSC1sX6uJuPcLh" #$(aws secretsmanager get-secret-value \
+            #--secret-id "/$PROJECT_NAME/$ENVIRONMENT/secrets/arangodb-password" \
+            #--secret-id "/cell-kn/sandbox/secrets/arangodb-password" \
+            #--query 'SecretString' \
+            #--output text \
+            #--region "$REGION")
+          
           # IMDSv2 token (AL2023 requires token-based metadata access)
           IMDS_TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
             -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
           INSTANCE_ID=$(curl -s -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" \
             http://169.254.169.254/latest/meta-data/instance-id)
-
+          
           docker run -d \
             --name arangodb \
             --restart unless-stopped \
@@ -462,7 +333,7 @@ Resources:
             --log-opt awslogs-group="$LOG_GROUP" \
             --log-opt awslogs-stream="arangodb/$INSTANCE_ID" \
             arangodb:3.12
-
+          
           # ArangoDB first-boot initialisation (password setup, key generation) can
           # take several minutes. Poll for up to 10 minutes before giving up.
           # /_admin/server/availability returns 200 without authentication.
@@ -477,7 +348,7 @@ Resources:
             echo "  attempt $i/60..."
             sleep 10
           done
-
+          
           if [ "$READY" = "0" ]; then
             echo "ERROR: ArangoDB did not become ready in time"
             docker logs arangodb --tail 50 || true
@@ -487,32 +358,32 @@ Resources:
               --region "${AWS::Region}"
             exit 1
           fi
-
+          
           # ── 5. Register with Cloud Map ────────────────────────────────────────
           PRIVATE_IP=$(curl -s -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" \
             http://169.254.169.254/latest/meta-data/local-ipv4)
-
+          
           echo "==> Registering with Cloud Map (service: $SD_SERVICE_ID, ip: $PRIVATE_IP)"
           aws servicediscovery register-instance \
             --service-id "$SD_SERVICE_ID" \
             --instance-id "$INSTANCE_ID" \
             --attributes "AWS_INSTANCE_IPV4=$PRIVATE_IP,AWS_INSTANCE_PORT=8529" \
             --region "$REGION"
-
+          
           # ── 6. Register with ALB target group ────────────────────────────────
-          TG_ARN=$(aws cloudformation list-exports \
-            --region "$REGION" \
-            --query "Exports[?Name=='${ProjectName}-${Environment}-arangodb-tg-arn'].Value" \
-            --output text)
-
+          TG_ARN="arn:aws:elasticloadbalancing:us-east-1:206537881715:targetgroup/cell-kn-sandbox-arangodb-tg/543bbbded93cc2f9" #$(aws cloudformation list-exports \
+            #--region "$REGION" \
+            #--query "Exports[?Name=='${ProjectName}-${Environment}-arangodb-tg-arn'].Value" \
+            #--output text)
+          
           echo "==> Registering with ALB target group ($TG_ARN)"
           aws elbv2 register-targets \
             --target-group-arn "$TG_ARN" \
-            --targets "Id=$INSTANCE_ID,Port=8529" \
+            --targets '[{"Id":"'"$INSTANCE_ID"'","Port":8529}]' \
             --region "$REGION"
-
+          
           echo "==> Setup complete $(date)"
-
+          
           # Signal CloudFormation success
           /opt/aws/bin/cfn-signal -e 0 \
             --stack "${AWS::StackName}" \
@@ -542,14 +413,3 @@ Outputs:
     Export:
       Name: !Sub '${ProjectName}-${Environment}-arangodb-private-ip'
 
-  ServiceDiscoveryDnsName:
-    Description: Service discovery DNS name
-    Value: !Sub 'arangodb.${ProjectName}-${Environment}.local'
-    Export:
-      Name: !Sub '${ProjectName}-${Environment}-arangodb-dns'
-
-  DatasetVersionParameter:
-    Description: SSM parameter name for dataset version
-    Value: !Ref DatasetVersionParameter
-    Export:
-      Name: !Sub '${ProjectName}-${Environment}-dataset-version-param'
