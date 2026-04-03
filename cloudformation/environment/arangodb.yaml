@@ -135,9 +135,9 @@ Resources:
     Type: AWS::EC2::Instance
     DependsOn:
       - ServiceDiscoveryService
-   #CreationPolicy:
-      #ResourceSignal:
-        #Timeout: PT30M
+   CreationPolicy:
+      ResourceSignal:
+        Timeout: PT30M
     Properties:
       # arm64 AMI — matches t4g (Graviton2) instance family.
       # If switching back to t3/x86, change to: al2023-ami-kernel-default-x86_64
@@ -379,8 +379,7 @@ Resources:
           echo "==> Registering with ALB target group ($TG_ARN)"
           aws elbv2 register-targets \
             --target-group-arn "$TG_ARN" \
-            --targets '[{"Id":"'"$INSTANCE_ID"'","Port":8529}]' \
-            --region "$REGION"
+            --targets '[{"Id":"'"$INSTANCE_ID"'","Port":8529}]' --region "$REGION"
           
           echo "==> Setup complete $(date)"
           
