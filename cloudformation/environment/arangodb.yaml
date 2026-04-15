@@ -135,7 +135,7 @@ Resources:
     Type: AWS::EC2::Instance
     DependsOn:
       - ServiceDiscoveryService
-   CreationPolicy:
+    CreationPolicy:
       ResourceSignal:
         Timeout: PT30M
     Properties:
@@ -178,7 +178,7 @@ Resources:
           set -euxo pipefail
           
           PROJECT_NAME="cell-kn"
-          ENVIRONMENT="dev"
+          ENVIRONMENT="sandbox"
           REGION="us-east-1"
           ACCOUNT_ID="206537881715"
           LOG_GROUP="/aws/arango/instance/cell-kn-db-sbox/arangodb"
@@ -307,12 +307,11 @@ Resources:
           systemctl enable docker
           systemctl start docker
           
-          ARANGO_PASSWORD="Svl6XSl25GDYYuGuW7UmGJ8kVvUvMhxMpa7sHSC1sX6uJuPcLh" #$(aws secretsmanager get-secret-value \
-            #--secret-id "/$PROJECT_NAME/$ENVIRONMENT/secrets/arangodb-password" \
-            #--secret-id "/cell-kn/sandbox/secrets/arangodb-password" \
-            #--query 'SecretString' \
-            #--output text \
-            #--region "$REGION")
+          ARANGO_PASSWORD=$(aws secretsmanager get-secret-value \
+            --secret-id "/$PROJECT_NAME/$ENVIRONMENT/secrets/arangodb-password" \
+            --query "SecretString" \
+            --output text \
+            --region "$REGION")
           
           # IMDSv2 token (AL2023 requires token-based metadata access)
           IMDS_TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
@@ -371,15 +370,29 @@ Resources:
             --region "$REGION"
           
           # ── 6. Register with ALB target group ────────────────────────────────
-          TG_ARN="arn:aws:elasticloadbalancing:us-east-1:206537881715:targetgroup/cell-kn-sandbox-arangodb-tg/543bbbded93cc2f9" #$(aws cloudformation list-exports \
-            #--region "$REGION" \
-            #--query "Exports[?Name=='${ProjectName}-${Environment}-arangodb-tg-arn'].Value" \
-            #--output text)
+          TG_ARN=$(aws cloudformation list-exports \
+            --region "$REGION" \
+            --query "Exports[?Name=='cell-kn-sandbox-arangodb-tg-arn'].Value" \
+            --output text)
           
           echo "==> Registering with ALB target group ($TG_ARN)"
           aws elbv2 register-targets \
             --target-group-arn "$TG_ARN" \
-            --targets '[{"Id":"'"$INSTANCE_ID"'","Port":8529}]' --region "$REGION"
+            --targets '[{"Id":"'"$INSTANCE_ID"'","Port":80}]' --region "$REGION"
+          
+          # ── 7. Start a reverses nginx to allow the alb health check pass due to alb does not support GET for health checking by header────────────────────────────────
+          sed -i '/root \{9\}/a \
+          \n\
+          location /health {\
+              proxy_pass http://127.0.0.1:8529/_admin/server/availability;\
+              proxy_set_header Host $host;\
+              proxy_set_header X-Real-IP $remote_addr;\
+              proxy_method GET;\
+          }' /etc/nginx/nginx.conf
+
+          #systemctl reload nginx
+          systemctl start nginx
+          
           
           echo "==> Setup complete $(date)"
           
