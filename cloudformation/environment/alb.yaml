@@ -78,54 +78,6 @@ Resources:
   #        Value: CloudFormation
 
   # ============================================================================
-  # S3 Bucket for ALB Access Logs
-  # ============================================================================
-  AlbLogsBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      BucketName: !Sub '${ProjectName}-${Environment}-alb-logs-${AWS::AccountId}'
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      LifecycleConfiguration:
-        Rules:
-          - Id: ExpireOldLogs
-            Status: Enabled
-            ExpirationInDays: 90
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Name
-          Value: !Sub '${ProjectName}-${Environment}-alb-logs-${AWS::AccountId}'
-        - Key: ManagedBy
-          Value: CloudFormation
-
-  AlbLogsBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref AlbLogsBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          # ELB service account for the region — required for ALB access logs.
-          # Account IDs are fixed per region: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/enable-access-logging.html
-          - Effect: Allow
-            Principal:
-              AWS: arn:aws:iam::127311923021:root
-            Action: s3:PutObject
-            Resource: !Sub '${AlbLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
-
-  # ============================================================================
   # Application Load Balancer
   # ============================================================================
   ApplicationLoadBalancer:
@@ -142,7 +94,8 @@ Resources:
         - Key: access_logs.s3.enabled
           Value: 'true'
         - Key: access_logs.s3.bucket
-          Value: !Ref AlbLogsBucket
+          Value: !ImportValue
+            Fn::Sub: '${ProjectName}-${Environment}-alb-bucket'
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -160,17 +113,18 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: !Sub '${ProjectName}-${Environment}-backend-tg'
-      Port: 8000
+      Port: 8000.
       Protocol: HTTP
       VpcId: !Ref VpcId
-      TargetType: ip
+      TargetType: instance
       HealthCheckEnabled: true
+      HealthCheckPort: 80 # NLM only allow port 80 for health check.
       HealthCheckProtocol: HTTP
       HealthCheckPath: /health/
       HealthCheckIntervalSeconds: 30
-      HealthCheckTimeoutSeconds: 5
+      HealthCheckTimeoutSeconds: 10
       HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 3
+      UnhealthyThresholdCount: 10
       Matcher:
         HttpCode: 200-399
       Tags:
@@ -193,7 +147,7 @@ Resources:
       TargetType: instance
       HealthCheckEnabled: true
       HealthCheckProtocol: HTTP
-      HealthCheckPath: /_admin/server/availability
+      HealthCheckPath: /health # A reverse proxy is configured with nginx to route /health to the root path /_admin/server/availability, so we can use it for health checks without modifying the ArangoDB configuration.
       HealthCheckIntervalSeconds: 30
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 2
@@ -334,7 +288,7 @@ Outputs:
 
   BackendUrl:
     Description: Backend API URL
-    Value: !Sub 'https://${ApplicationLoadBalancer.DNSName}:8000'
+    Value: !Sub 'https://${ApplicationLoadBalancer.DNSName}:80'
     Export:
       Name: !Sub '${ProjectName}-${Environment}-backend-url'
 
