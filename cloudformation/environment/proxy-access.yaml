@@ -1,0 +1,168 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::LanguageExtensions
+Description: >-
+  Cell-KN sandbox proxy-access rules. Defines, from a SINGLE source of truth, the
+  inbound allow rules for the NIH/NCBI web-proxy egress ranges on BOTH firewall
+  layers that guard the ALB: (1) the ALB security group and (2) the subnet
+  Network ACL. Managing both here prevents the security-group/Network-ACL drift
+  that made the site unreachable (see SANDBOX-FINDINGS.md, Findings 1 & 3).
+
+# ============================================================================
+# WHY THIS TEMPLATE EXISTS
+# ----------------------------------------------------------------------------
+# Access to https://cell-kn-api.awsab.nlm.nih.gov is allowed only from approved
+# NIH sources (Developers Subnet, Developers VPN, NLM Scanners, and the NCBI
+# Squid web-proxy egress). A request must be permitted by TWO independent
+# firewalls:
+#   * the ALB SECURITY GROUP  (stateful,  attached to the load balancer)
+#   * the subnet NETWORK ACL  (stateless, attached to the ALB's subnets)
+# These had been edited by hand and drifted out of sync (the proxy IP
+# 130.14.25.182 was in the SG but not the NACL), so traffic was silently
+# dropped. This template keeps them aligned by generating both sets of rules
+# from the ProxyRanges mapping below.
+#
+# DEPLOYMENT NOTES (read before deploying):
+#   1. The SG (sg-06415d49b7c8a689c) and NACL (acl-08914a851e84ea93b) are
+#      NIH-pre-created; this stack only ADDS rules to them, it does not own them.
+#   2. Existing MANUAL rules for these same CIDRs/ports must be removed first
+#      (or imported), otherwise CloudFormation will fail with "rule already
+#      exists" (SG) or a duplicate rule-number (NACL). See the script at the
+#      bottom of this header for the manual entries to clear.
+#   3. NACL rule numbers are assigned in the 200-block to avoid colliding with
+#      the existing hand-made entries (100-112) and the ephemeral-range rules
+#      (1000+). Adjust if your account already uses the 200-block.
+#   4. To add a new proxy range later, add ONE line to the ProxyRanges mapping
+#      (CIDR + two unused NACL rule numbers). Both firewalls update together.
+# ============================================================================
+
+Parameters:
+  AlbSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Default: sg-06415d49b7c8a689c
+    Description: Existing ALB security group to add proxy ingress rules to.
+
+  NetworkAclId:
+    Type: String
+    Default: acl-08914a851e84ea93b
+    Description: Existing subnet Network ACL to add proxy inbound rules to.
+
+Mappings:
+  # ------------------------------------------------------------------------
+  # SINGLE SOURCE OF TRUTH for allowed inbound ranges.
+  # Each entry needs:
+  #   Cidr     - the source range
+  #   Label    - human description (copied into the SG rule description; should
+  #              match the existing console convention, e.g. "Developers VPN")
+  #   Nacl443  - an unused NACL rule number for the :443 inbound entry
+  #   Nacl80   - an unused NACL rule number for the :80  inbound entry
+  # The same Cidr is applied to BOTH the security group and the Network ACL.
+  #
+  # Labels and CIDRs mirror the existing hand-added SG rule descriptions
+  # (verified against the live security group). Distinct access sources:
+  #   * Developers Subnet IPv4   130.14.160.0/24
+  #   * Developers VPN IPv4      130.14.233.0/25, 130.14.237.0/25
+  #   * NLM Scanners             130.14.15.186/32
+  #   * NCBI proxy               130.14.25.182/32  (the Squid web-proxy egress;
+  #                              added 2026-06-02, was missing from the NACL,
+  #                              which caused the outage)
+  # NOTE: confirm the proxy egress with the NCBI/NIH network team — ideally
+  # replace the single /32 with the proxy's published egress CIDR range(s).
+  # ------------------------------------------------------------------------
+  AllowedIngress:
+    devSubnet:
+      Cidr: '130.14.160.0/24'
+      Label: 'Developers Subnet IPv4'
+      Nacl443: '200'
+      Nacl80: '201'
+    devVpn1:
+      Cidr: '130.14.233.0/25'
+      Label: 'Developers VPN IPv4'
+      Nacl443: '202'
+      Nacl80: '203'
+    devVpn2:
+      Cidr: '130.14.237.0/25'
+      Label: 'Developers VPN IPv4'
+      Nacl443: '204'
+      Nacl80: '205'
+    nlmScanners:
+      Cidr: '130.14.15.186/32'
+      Label: 'NLM Scanners'
+      Nacl443: '206'
+      Nacl80: '207'
+    ncbiProxy:
+      Cidr: '130.14.25.182/32'
+      Label: 'NCBI proxy'
+      Nacl443: '208'
+      Nacl80: '209'
+
+Resources:
+  # ------------------------------------------------------------------------
+  # SECURITY GROUP ingress (ports 443 and 80) for every proxy range.
+  # Stateful: return traffic is allowed automatically.
+  # ------------------------------------------------------------------------
+  'Fn::ForEach::SgIngressRules':
+    - RangeKey
+    - [devSubnet, devVpn1, devVpn2, nlmScanners, ncbiProxy]
+    - 'SgIngress443${RangeKey}':
+        Type: AWS::EC2::SecurityGroupIngress
+        Properties:
+          GroupId: !Ref AlbSecurityGroupId
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !FindInMap [AllowedIngress, !Ref RangeKey, Cidr]
+          Description: !Sub
+            - 'HTTPS Access from ${Label}'
+            - Label: !FindInMap [AllowedIngress, !Ref RangeKey, Label]
+      'SgIngress80${RangeKey}':
+        Type: AWS::EC2::SecurityGroupIngress
+        Properties:
+          GroupId: !Ref AlbSecurityGroupId
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !FindInMap [AllowedIngress, !Ref RangeKey, Cidr]
+          Description: !Sub
+            - 'HTTP Access from ${Label}'
+            - Label: !FindInMap [AllowedIngress, !Ref RangeKey, Label]
+
+  # ------------------------------------------------------------------------
+  # NETWORK ACL inbound entries (ports 443 and 80) for every proxy range.
+  # Stateless: the existing outbound ephemeral-port rule (1024-65535 -> 0/0)
+  # already covers the return path, so only inbound entries are needed here.
+  # ------------------------------------------------------------------------
+  'Fn::ForEach::NaclInboundRules':
+    - RangeKey
+    - [devSubnet, devVpn1, devVpn2, nlmScanners, ncbiProxy]
+    - 'NaclIn443${RangeKey}':
+        Type: AWS::EC2::NetworkAclEntry
+        Properties:
+          NetworkAclId: !Ref NetworkAclId
+          RuleNumber: !FindInMap [AllowedIngress, !Ref RangeKey, Nacl443]
+          Protocol: 6          # TCP
+          RuleAction: allow
+          Egress: false        # inbound
+          CidrBlock: !FindInMap [AllowedIngress, !Ref RangeKey, Cidr]
+          PortRange:
+            From: 443
+            To: 443
+      'NaclIn80${RangeKey}':
+        Type: AWS::EC2::NetworkAclEntry
+        Properties:
+          NetworkAclId: !Ref NetworkAclId
+          RuleNumber: !FindInMap [AllowedIngress, !Ref RangeKey, Nacl80]
+          Protocol: 6          # TCP
+          RuleAction: allow
+          Egress: false        # inbound
+          CidrBlock: !FindInMap [AllowedIngress, !Ref RangeKey, Cidr]
+          PortRange:
+            From: 80
+            To: 80
+
+Outputs:
+  ManagedSecurityGroupId:
+    Description: Security group these proxy rules were added to.
+    Value: !Ref AlbSecurityGroupId
+  ManagedNetworkAclId:
+    Description: Network ACL these proxy rules were added to.
+    Value: !Ref NetworkAclId
