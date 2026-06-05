@@ -1,0 +1,412 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: agrango DB server launch template
+
+# Metadata:
+
+Parameters:
+  pAWSAccount:
+      Description: 'Account (NLM-PROD, NLM-QA, NLM-INT, NLM-SEC)'
+      Type: String
+      Default: "NLM-SBOX"
+  pVPCName:
+      Description: Parent VPC shortname e.g. prod1
+      Type: String
+      Default: "vpc-101"
+  pAppName:
+      Description: App Name
+      Type: String
+      Default: "CELL-KN"
+  pAppInstanceAMIID:
+      Type: "String"
+      Default: "ami-0b7590cd0375fb3d8"
+  pAppInstanceType:
+      Description: Enter the instance type to be used e.g. t2.small
+      Type: String
+      Default: "t3.medium"
+  pEC2KeyPair:
+      Description: Key pair to be used for App servers
+      Type: String
+      Default: "chenx21-pivr"
+  pAWSAccountLC:
+      Description: Account name in lower-case - used for bucket name
+      Type: String
+      Default: "nlm-sbox"
+  pAppCodeRevision:
+      Description: Blue or Green revision number.
+      Type: String
+      Default: master
+  pNessusHost:
+    Description: Nessus Host
+    Type: String
+    Default: "fedcloud.tenable.com"
+  pNessusLinkingKey:
+    Description: Nessus Host
+    Type: String
+    Default: "b3690de0bd7da7cd303f40a29f33091795d6a09b065c88ee2e2404ad3c4ecbee"
+  pNessusGroupName:
+      Type: String
+      Default: "AWS_NLM-SBOX-CELL-KN"
+  pSharedServicesVPC:
+      Description: VPC hosting shared services to peer with
+      Type: "String"
+      Default: "shared-services"
+  pAppNameLC:
+      Description: App Name
+      Type: String
+      Default: "cell-kn"
+  pMinAppServersSize:
+      Description: Minimum App Servers. (For Autoscaling)
+      Type: String
+      Default: "1"
+  pMaxAppServersSize:
+      Description: Maximum App Servers. (For Autoscaling)
+      Type: String
+      Default: "1"
+  pDefaultEBSRootVolumeSize:
+      Description: Default EBS Root Volume Size
+      Type: String
+      Default: "25"
+  pLocalRolesVersion:
+      Description: Version of localroles to install
+      Type: String
+      Default: "0.3"
+  pAppRoleLC:
+      Description: Anzible role name
+      Type: String
+      Default: "docker"
+  pDjangoEnv:
+      Description: Django environment
+      Type: String
+      Default: "staging"
+  pLocalRoleRebuild:
+      Description: Rebuild role or not
+      Type: String
+      Default: "no"
+  pPythonVer:
+      Description: Python version 36 or 38
+      Type: String
+      Default: "39"
+  pDBSecret:
+    Description: Path to DB secrets
+    Type: String
+    Default: "/dbsecrets/serials_int@serials-db-int"
+  pEFSName:
+    Description: EFS name to be mounted
+    Type: String
+    Default: ""
+  pPKeys:
+    Description: Additional public keys
+    Type: String
+    Default: ""
+Conditions:
+  cInt: !Equals [!Ref pAWSAccount, 'NLM-INT']
+Resources:
+  rAdminServerInstance:
+    Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+            default:
+              - "cloud_init"
+              - "config"
+              - "environment"
+        environment:
+          files:
+            /usr/nlm/env:
+              content: !Sub |
+                #Environment variables for start script
+                #Server name, should be real DNS name
+                #Mongo database(s) like this:
+                export AWS_DEFAULT_REGION=${AWS::Region}
+                export DJANGO_SETTINGS_MODULE=${pDjangoEnv}
+              mode: "000644"
+              owner: "root"
+              group: "root"
+        cloud_init:
+          files:
+            /etc/cfn/cfn-hup.conf:
+              content: !Sub |
+                [main]
+                stack= ${AWS::StackId}
+                region=${AWS::Region}
+              mode: "000400"
+              owner: "root"
+              group: "root"
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.rAppAutoScalingLaunchTemplate.Metadata.AWS::CloudFormation::Init
+                action=/bin/cfn-init -v --stack ${AWS::StackName} --resource rAppAutoScalingLaunchTemplate --region ${AWS::Region}
+                runas=root
+              mode: '000400'
+              owner: root
+              group: root
+          services:
+            cfn-hup:
+              enabled: 'true'
+              ensureRunning: 'true'
+              files:
+                - "/etc/cfn/cfn-hup.conf"
+                - "/etc/cfn/hooks.d/cfn-auto-reloader.conf"
+        config:
+          files:
+            /usr/nlm/apps/serials-compose.yml:
+              content:  !Sub |
+                services:
+                  serials:
+                    image: tools.nlm.nih.gov/serials:${pAppCodeRevision}
+                    environment:
+                      - DJANGO_SETTINGS_MODULE=conf.settings.${pDjangoEnv}
+                      - DJANGO_LOG_DIR=/tmp
+                      - INDEX_URL=https://tools.nlm.nih.gov/artifactory/api/pypi/nlm-pypi-312-master-virtual/simple
+                      - PIP_REQUIREMENTS_FILE=requirements.txt
+                      - DB_NAME=${!DBS_dbInstanceIdentifier}
+                      - DB_USER=${!DBS_username}
+                      - DB_PASSWORD=${!DBS_password}
+                      - DB_HOST=${!DBS_host}
+                      - DB_PORT=${!DBS_port}
+                      - PGSSLCERT=/tmp/postgresql.crt
+                      - UNIT_LOG=/var/log/unit/access.log
+                      - UNIT_THREADS=6
+                      - UNIT_PROCESSES_MAX=1
+                      - UNIT_PROCESSES_SPARE=1
+                      - SERVER_TYPE=adm
+                    volumes:
+                      - /var/nlm/django:/tmp
+                      - /var/nlm/apps/logs:/var/log/nginx
+                      - ${pFTPMount}
+                      - ${pSEFMount}
+                    extra_hosts:
+                      - host.docker.internal:host-gateway
+                    logging:
+                      driver: syslog
+                      options:
+                        tag: docker-compose-service
+                        syslog-format: rfc5424
+                    ports:
+                      - "80:8080"
+                    entrypoint: "/bin/bash -c 'sed -i \"s@unit:x:997:@unit:x:402:voyager@\" /etc/group; echo -e \"exlibris:x:103:unit\\npubs:x:201:unit\\nalmaexl:x:7005:unit\" >> /etc/group; echo \"voyager:x:102:103::/home/voyager:/bin/bash\" >> /etc/passwd; sed -i \"s@unit:x:997:997@unit:x:6017:402@\" /etc/passwd; source /usr/nlm/django/bin/django-env; sed -i \"s@--log /dev/stdout@--log /var/log/unit/access.log@g\" /usr/nlm/django/bin/django-start; rm -f /tmp/serials.log; source /usr/nlm/django/bin/django-env; cd /usr/nlm/django/application; python manage.py qcluster;'"
+            /usr/nlm/apps/serials-app-agent.yml:
+              content:  !Sub |
+                nlminit_metrics_namespace: "Serials Linux System"
+                nlminit_user_logs:
+                  -
+                    time_zone: 'LOCAL'
+                    datetime_format:  '%b %d %H:%M:%S'
+                    file: '/var/nlm/django/serials.log'
+                    log_group_name: 'Serials-app-log'
+                    log_stream_name: 'serials-adm-log'
+                nlminit_user_metrics:
+                  -
+                    name: "mem"
+                    interval: "30"
+                    measurment:
+                      -
+                        name: "used_percent"
+                      -
+                        name: "free"
+                        unit: "Kilobytes"
+                      -
+                        name: "available"
+                      -
+                        name: "used"
+                  -
+                    name: "swap"
+                    interval: "30"
+                    measurment:
+                      -
+                        name: "used_percent"
+                      -
+                        name: "free"
+                      -
+                        name: "used"
+                        unit: "Kilobytes"
+                  -
+                    name: "disk"
+                    interval: "30"
+                    resources:
+                      -
+                        value: "/var/log"
+                      -
+                        value: "/usr/nlm"
+                      -
+                        value: "/"
+                    measurment:
+                      -
+                        name: "used_percent"
+            /usr/nlm/django-conf.json:
+              content:  !Sub |
+                {
+                  "django_python_version": "${pPythonVer}",
+                  "config_only": false,
+                  "django_app": {
+                        "title": "ChangingDjango",
+                        "descriptions": "Changing Faces of Medicine Django AWS application",
+                        "conf": {
+                          "settings": "conf.settings.${pDjangoEnv}",
+                          "venv_reset": true
+                        },
+                        "source": {
+                          "location": "/tmp/changing.tar.gz",
+                          "lib_location": "/tmp/changing-lib.tar.gz"
+                        },
+                        "cron": {
+                          "app_user": "nginx",
+                          "aws_region": "${AWS::Region}",
+                          "management":
+                            [
+                              {
+                                 "name": "System Django session cleanup command",
+                                 "minute": "1",
+                                 "hour": "2",
+                                 "command": "clearsessions"
+                              }
+                            ]
+                        }
+                  }
+                }
+    Properties:
+        IamInstanceProfile: !ImportValue
+          Fn::Sub: ${pAWSAccount}-${pVPCName}-${pAppName}-adm-instance-profile
+        ImageId: !Ref pAppInstanceAMIID
+        InstanceType: !Ref pAppInstanceType
+        KeyName: !Ref pEC2KeyPair
+        SubnetId: !ImportValue
+          Fn::Sub: ${pAWSAccount}-${pVPCName}-${pAppName}-app-subnet-a
+        BlockDeviceMappings:
+          - DeviceName: "/dev/xvda"
+            Ebs:
+              DeleteOnTermination: "true"
+              VolumeSize: !Ref pDefaultEBSRootVolumeSize
+              VolumeType: "gp3"
+        SecurityGroupIds:
+          - !ImportValue
+              Fn::Sub: ${pAWSAccount}-${pVPCName}-${pAppName}-admin-sg
+        Tags:
+          - Key: Name
+            Value: !Sub ${pAWSAccount}-${pVPCName}-${pAppName}-Admin Server
+          - Key: AWS-Account
+            Value: !Sub ${pAWSAccount}
+        # SpotPrice:
+        UserData:
+          Fn::Base64:
+            !Sub |
+                #!/bin/bash -x
+                /bin/logger "=======LC Init START: $(/bin/date)======="
+                # Adding SWAP
+                fallocate -l 2G /swapfile; chmod 600 /swapfile; mkswap /swapfile; swapon /swapfile;
+            
+                # To be sure if we have defaul python (will be in SuperAMI) 
+                ln -sf /usr/bin/python3 /usr/bin/python
+                # Disable firewall (will be in SuperAMI)
+                systemctl stop firewalld
+                systemctl disable firewalld
+                # Fix script and copy roles to defualt path, needed by 'nlminit' log initializer 
+                sed -i 's@/bin/ansible-playbook@ansible-playbook@' /usr/nlm/bin/nlminit
+                cp -rf /usr/nlm/devops-ansible-local/roles/ansible-nlminit /etc/ansible/roles
+                cp -rf /usr/nlm/devops-ansible-local/roles/ansible-common /etc/ansible/roles
+            
+                # Add public keys for multiple people to be able to login
+                if [[ "${pPKeys}" ]]; then
+                  echo -e "${pPKeys}" >> /home/ec2-user/.ssh/authorized_keys
+                fi
+            
+                # Update hostname
+                /opt/super/update
+            
+                # Download Docker-compose plugin (will be in SuperAMI) and start Docker
+                mkdir -p /usr/lib/docker/cli-plugins
+                curl -SL https://github.com/docker/compose/releases/download/v2.27.0/docker-compose-linux-x86_64 -o /usr/lib/docker/cli-plugins/docker-compose
+                chmod +x /usr/lib/docker/cli-plugins/docker-compose
+                systemctl start docker
+            
+                # Update Postfix configuration to allow access from containers
+                sed -i 's@inet_interfaces = loopback-only@inet_interfaces = 172.17.0.1, localhost@' /etc/postfix/main.cf
+                sed -i 's@#mynetworks = 168.100.3.0/28, 127.0.0.0/8@mynetworks = 127.0.0.0/8, 172.0.0.0/8@' /etc/postfix/main.cf
+                # Update Postfix configuration to increase message size limit
+                echo "message_size_limit = 31457280" >> /etc/postfix/main.cf
+                systemctl restart postfix
+
+                /bin/logger "=======LC Init CFN Init: $(/bin/date)======="
+                /bin/cfn-init -s ${AWS::StackId} -r rAdminServerInstance --region ${AWS::Region}
+                # Start up the cfn-hup daemon to listen for changes to the EC2 instance metadata
+
+                # Setting up environment
+                source /usr/nlm/env
+
+                /opt/nessus_agent/sbin/nessuscli agent link --key=${pNessusLinkingKey} --host=${pNessusHost}  --port=443 --groups=${pNessusGroupName}
+
+                /bin/logger "=======LC Init Update Configuration Files: $(/bin/date)======="
+
+                # Update local roles
+                /usr/nlm/devops-ansible-local/local/init-local -s -o
+
+                /bin/logger "=======LC Init Log Init: $(/bin/date)======="
+                /usr/nlm/bin/nlminit "${pAWSAccount}-${AWS::Region}" ${AWS::Region} ${pAppNameLC}-app-{instance_id} /usr/nlm/apps/serials-app-agent.yml
+
+                # Adding 'alma' and 'exlibris' users with same id's as on-prem
+                groupadd -g 402 ilsadm
+                groupadd -g 103 exlibris
+                groupadd -g 201 pubs
+                groupadd -g 7005 almaexl
+            
+                useradd -g 402 -u 6017 alma
+                usermod -a -G exlibris alma
+                usermod -a -G pubs alma
+                usermod -a -G almaexl alma
+            
+                useradd -g 103 -u 102 voyager
+                usermod -a -G ilsadm voyager
+            
+                usermod -a -G docker ec2-user
+                
+                # This is for long running processes
+                dnf install -y --nogpgcheck tmux
+            
+                /bin/logger "=======LC Init Mounting EFS Volume: $(/bin/date)======="
+                mkdir /serials_data
+                echo "${pEFSName}:/ /serials_data efs _netdev,noresvport,tls,iam 0 0" >> /etc/fstab
+                mount /serials_data
+            
+                /bin/logger "=======LC Init Application Configuration and Startup: $(/bin/date)======="
+                # Fix log directory permissions
+                chown 997:997 /var/nlm/django
+                chmod 1777 /var/nlm/django
+            
+                # Prepare scripts
+                curl -s https://tools.nlm.nih.gov/artifactory/nlm-occs-devops/docker/scripts/start-compose.sh > /usr/nlm/bin/start-compose.sh 
+                curl -s https://tools.nlm.nih.gov/artifactory/nlm-occs-devops/docker/scripts/check-secret.sh > /usr/nlm/bin/check-secret.sh 
+
+                chmod +x /usr/nlm/bin/start-compose.sh
+                chmod +x /usr/nlm/bin/check-secret.sh
+
+                # Extract secret and start application
+                /usr/nlm/bin/start-compose.sh /usr/nlm/apps/serials-compose.yml ${pDBSecret}
+           
+                # Prepare Cron Job to check password expiration - disabled for now
+                # echo "# Every 15 minutes starting 7, run the script to check if password expired" >> /var/spool/cron/root
+                # echo "7,22,37,52 * * * * /usr/nlm/bin/check-secret.sh /usr/nlm/apps/serials-compose.yml ${pDBSecret}" >> /var/spool/cron/root
+                # systemctl restart crond 
+ 
+                /bin/logger "=======LC Init Sending Signal: $(/bin/date)======="
+                # Application up and running, send signal
+                /bin/cfn-signal -e 0 --stack ${AWS::StackId} --resource rAppAutoScalingGroup --region ${AWS::Region}
+
+                /bin/logger "=======LC Init STOP: $(/bin/date)======="
+                exit 0
+
+  rCreateDNSRRIPV4toALBPrivate:
+    Type: AWS::Route53::RecordSetGroup
+    DependsOn: rAdminServerInstance
+    Properties:
+      #HostedZoneName: !Ref pRoute53HostedZoneName
+      HostedZoneId: !ImportValue
+        Fn::Sub: ${pAWSAccount}-${pHostedZoneName}-dns-zone-private
+      Comment: Zone in Route 53 to host this AL
+      RecordSets:
+        - Name: !Join ['',[ Ref: pAppAdmDNSHostName, '-', Ref: "AWS::Region", '.', Ref: pRoute53HostedZoneName ] ]
+          Type: A
+          ResourceRecords:
+            - !GetAtt rAdminServerInstance.PrivateIp
+          TTL: '900'
