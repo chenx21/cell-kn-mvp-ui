@@ -122,8 +122,12 @@ Resources:
             CSRF_COOKIE_SECURE=False
             
             # == ArangoDB Connection
-            
-            ARANGO_DB_HOST=http://arango_db:8529
+
+            # Reach ArangoDB via Cloud Map service discovery, over port 80 (the
+            # ArangoDB instance's nginx proxies 80 -> 8529). 
+            # NOTE: "arango_db" was a leftover docker-compose service name and does not
+            # resolve in the VPC; the service-discovery name is arangodb.cell-kn-dev.local.
+            ARANGO_DB_HOST=http://arangodb.cell-kn-dev.local
             ARANGO_DB_USER=root
             ARANGO_DB_PASSWORD="DB_PASSWORD"
             ARANGO_DB_NAME_ONTOLOGIES=Cell-KN-Ontologies
