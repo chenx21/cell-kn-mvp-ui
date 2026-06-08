@@ -44,9 +44,8 @@ Parameters:
   # Subnet to co-locate the backend with ArangoDB.
   # ArangoDB is pinned to subnet-0a0aacec5e8ceefcd (10.0.96.0/26) in the arangodb
   # stack. Placing the backend ASG in the SAME subnet keeps backend→ArangoDB
-  # traffic intra-subnet, which bypasses NACL acl-00af2c51807e9ab93 entirely
-  # (DRIFT-RECONCILIATION item 5 / SANDBOX-ISSUES #3) — so the cross-subnet
-  # port-80 block goes away with no NACL change.
+  # traffic intra-subnet, which bypasses NACL acl-00af2c51807e9ab93 entirely —
+  # so the cross-subnet port-80 block goes away with no NACL change.
   #
   # LIMITATIONS / trade-offs of pinning to one subnet:
   #   - Single-AZ: the backend now lives in one AZ. If that AZ/subnet has an
@@ -67,6 +66,13 @@ Parameters:
       Subnet for the backend ASG. Defaults to ArangoDB's subnet so the two are
       co-located (intra-subnet, no NACL traversal). Must match the subnet the
       arangodb stack pins its EC2 instance to.
+
+  pVpcId:
+    Type: AWS::EC2::VPC::Id
+    Default: vpc-0ee6b25a12c642104
+    Description: >
+      VPC for the backend target group. Default is the sandbox VPC that hosts
+      the ALB and the backend instance.
 
 
 Resources:
@@ -220,6 +226,35 @@ Resources:
             fi
 
   # -----------------------------
+  # Backend target group — traffic on PORT 80. Named `…-backend-tg-80` to avoid
+  # a name collision with the existing `…-backend-tg`. The ARN is exported below
+  # for the ALB listener to forward to. See the PR description for the rationale
+  # and the listener-repoint cutover steps.
+  rBackendTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${pAppNameLC}-sandbox-backend-tg-80
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref pVpcId
+      TargetType: instance
+      HealthCheckEnabled: true
+      HealthCheckPort: traffic-port   # = 80; check and real traffic now hit the same port
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: /health/
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 10
+      Matcher:
+        HttpCode: 200-399
+      Tags:
+        - Key: Name
+          Value: !Sub ${pAppNameLC}-sandbox-backend-tg-80
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # -----------------------------
   # Auto Scaling Group for ECS capacity
   # -----------------------------
   rEcsAutoScalingGroup:
@@ -243,8 +278,22 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref rEcsLaunchTemplate
         Version: !GetAtt rEcsLaunchTemplate.LatestVersionNumber
+      # Register instances into BOTH backend target groups during the cutover.
+      # The ASG registers on each TG's default port:
+      #   - new …-backend-tg-80 (port 80)  → health check AND real traffic on :80
+      #   - old …-backend-tg     (port 8000, ImportValue) → kept registered so the
+      #     :443 listener's priority-50 rule (still pointing at it) doesn't fall to
+      #     an empty target group while the loadbalancer stack is repointed.
+      #
+      # CUTOVER ORDER:
+      #   1. Deploy this stack  → instance is in both TGs; no change in behavior.
+      #   2. Repoint the ALB :443 listener rules to …-backend-tg-80-arn (in the
+      #      `…cellkn-loadbalancer` stack)  → traffic now flows over :80.
+      #   3. Follow-up: remove the old ImportValue line below once the listener no
+      #      longer references the :8000 group.
       TargetGroupARNs:
-        - Fn::ImportValue: !Sub ${pAppNameLC}-sandbox-backend-tg-arn
+        - !Ref rBackendTargetGroup
+        - Fn::ImportValue: !Sub ${pAppNameLC}-sandbox-backend-tg-arn   # old :8000 TG — remove after listener cutover (step 3)
         #- arn:aws:elasticloadbalancing:us-east-1:206537881715:targetgroup/cell-kn-sandbox-backend-tg/fcf51f84ed1fb850
       Tags:
         - Key: Name
@@ -281,3 +330,11 @@ Outputs:
     Value: !Ref rEcsCluster
     Export:
       Name: !Sub ${pAwsAccount}-${pAppNameLC}-ECS-Cluster
+
+  # ARN of the port-80 backend target group. Repoint the ALB :443 listener rules
+  # (in the `…cellkn-loadbalancer` stack) to this export to complete the port-80 cutover.
+  oBackendTargetGroupArn:
+    Description: Port-80 backend target group ARN (for the ALB listener to forward to)
+    Value: !Ref rBackendTargetGroup
+    Export:
+      Name: !Sub ${pAppNameLC}-sandbox-backend-tg-80-arn
