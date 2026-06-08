@@ -41,6 +41,33 @@ Parameters:
     Type: Number
     Default: 2
 
+  # Subnet to co-locate the backend with ArangoDB.
+  # ArangoDB is pinned to subnet-0a0aacec5e8ceefcd (10.0.96.0/26) in the arangodb
+  # stack. Placing the backend ASG in the SAME subnet keeps backend→ArangoDB
+  # traffic intra-subnet, which bypasses NACL acl-00af2c51807e9ab93 entirely
+  # (DRIFT-RECONCILIATION item 5 / SANDBOX-ISSUES #3) — so the cross-subnet
+  # port-80 block goes away with no NACL change.
+  #
+  # LIMITATIONS / trade-offs of pinning to one subnet:
+  #   - Single-AZ: the backend now lives in one AZ. If that AZ/subnet has an
+  #     outage there is no capacity elsewhere. Acceptable for the single-instance
+  #     sandbox; revisit before any multi-AZ/HA posture.
+  #   - Capacity: all backend instances share one subnet's IP space and AZ, so
+  #     ASG scale-out is bounded by that subnet. With port-80-only this is already
+  #     ~one task per instance, so it's not the limiting factor today.
+  #   - Coupling: this only co-locates if the value matches ArangoDB's actual
+  #     subnet. If ArangoDB is ever moved, update this too (ideally both should
+  #     read one shared source/export rather than two hard-coded values).
+  #   - Co-location is a placement convenience, NOT access control: the security
+  #     group is still what permits backend→ArangoDB on :80. Keep that SG rule.
+  pBackendSubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Default: subnet-0a0aacec5e8ceefcd
+    Description: >
+      Subnet for the backend ASG. Defaults to ArangoDB's subnet so the two are
+      co-located (intra-subnet, no NACL traversal). Must match the subnet the
+      arangodb stack pins its EC2 instance to.
+
 
 Resources:
   # -----------------------------
@@ -198,10 +225,18 @@ Resources:
   rEcsAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
+      # Co-located with ArangoDB: pinned to a single subnet (pBackendSubnetId,
+      # default = ArangoDB's subnet) so backend→ArangoDB stays intra-subnet and
+      # never crosses the NACL. See pBackendSubnetId for the limitations this
+      # introduces (single-AZ, subnet-bounded scaling). To restore multi-AZ
+      # spread, list the app-a/b/c imports again instead — but that reopens the
+      # cross-subnet NACL problem (DRIFT item 5) unless the NACL is also fixed.
       VPCZoneIdentifier:
-        - Fn::ImportValue: !Sub ${pAwsAccount}-${pVpcName}-subnet-private-Development-app-a
-        - Fn::ImportValue: !Sub ${pAwsAccount}-${pVpcName}-subnet-private-Development-app-b
-        - Fn::ImportValue: !Sub ${pAwsAccount}-${pVpcName}-subnet-private-Development-app-c
+        - !Ref pBackendSubnetId
+      # Previous (multi-AZ, but not co-located with ArangoDB):
+      #   - Fn::ImportValue: !Sub ${pAwsAccount}-${pVpcName}-subnet-private-Development-app-a
+      #   - Fn::ImportValue: !Sub ${pAwsAccount}-${pVpcName}-subnet-private-Development-app-b
+      #   - Fn::ImportValue: !Sub ${pAwsAccount}-${pVpcName}-subnet-private-Development-app-c
       MinSize: !Ref pMinSize
       MaxSize: !Ref pMaxSize
       DesiredCapacity: !Ref pDesiredCapacity
